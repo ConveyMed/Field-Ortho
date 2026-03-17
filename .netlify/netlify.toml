@@ -1,0 +1,52 @@
+functionsDirectory = "/Users/chasekellis/Apps/FieldOrtho/netlify/functions"
+functionsDirectoryOrigin = "default"
+plugins = []
+
+[build]
+publish = "/Users/chasekellis/Apps/FieldOrtho/build"
+publishOrigin = "config"
+commandOrigin = "config"
+command = "CI=false npm run build"
+functions = "/Users/chasekellis/Apps/FieldOrtho/netlify/functions"
+
+[build.environment]
+
+[build.processing]
+
+[build.processing.css]
+
+[build.processing.html]
+
+[build.processing.images]
+
+[build.processing.js]
+
+[build.services]
+
+[functions]
+
+[functions."*"]
+
+[[headers]]
+for = "/.well-known/apple-app-site-association"
+
+[headers.values]
+Content-Type = "application/json"
+
+[[headers]]
+for = "/.well-known/assetlinks.json"
+
+[headers.values]
+Content-Type = "application/json"
+
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
