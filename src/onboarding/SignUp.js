@@ -31,21 +31,56 @@ function SignUp() {
     setIsCreating(true);
 
     try {
+      const trimmedEmail = email.trim().toLowerCase();
+
       const { data, error } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
-        password: password
+        email: trimmedEmail,
+        password: password,
+        options: {
+          emailRedirectTo: undefined,
+          data: {}
+        }
       });
 
       if (error) {
+        // If rate limited on email, the account may still have been created (auto-confirmed).
+        // Try signing in directly.
+        if (error.message.toLowerCase().includes('rate limit')) {
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: trimmedEmail,
+            password: password
+          });
+          if (!signInError) return; // signed in, AuthContext handles redirect
+        }
+
+        // If user already exists, try signing in
+        if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already exists')) {
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: trimmedEmail,
+            password: password
+          });
+          if (!signInError) return;
+          alert('Account already exists. Try signing in instead.');
+          navigate('/');
+          return;
+        }
+
         console.error('Error creating account:', error);
         alert('Error creating account: ' + error.message);
         setIsCreating(false);
         return;
       }
 
-      // Check if email confirmation is required
+      // If no session returned, sign in directly
       if (data.user && !data.session) {
-        navigate('/confirm-email', { state: { email: email } });
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: trimmedEmail,
+          password: password
+        });
+        if (signInError) {
+          alert('Account may already exist. Try signing in instead.');
+          navigate('/');
+        }
       }
       // If auto-confirmed, AuthContext will handle redirect
     } catch (error) {
