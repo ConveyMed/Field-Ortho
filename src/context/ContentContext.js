@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { supabase } from '../config/supabase';
+import { deleteBunnyVideo, getBunnyVideoStatus } from '../services/bunnyVideo';
 
 const ContentContext = createContext({});
 
@@ -159,10 +160,57 @@ export const ContentProvider = ({ children }) => {
       setTrainingCategories(training);
       setFormsCategories(forms);
       setInitialLoaded(true);
+
+      // Sync any stale "processing" videos with Bunny's actual status
+      syncProcessingVideos(itemsData || [], (updatedMap) => {
+        const applyUpdates = (prev) => prev.map(c => ({
+          ...c,
+          items: c.items.map(i => updatedMap[i.id]
+            ? { ...i, bunny_video_status: updatedMap[i.id] }
+            : i
+          ),
+        }));
+        setLibraryCategories(applyUpdates);
+        setTrainingCategories(applyUpdates);
+        setFormsCategories(applyUpdates);
+      });
     } catch (err) {
       console.error('Error loading content:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Check Bunny for any items stuck at "processing" and update DB + state
+  const syncProcessingVideos = async (items, onUpdates) => {
+    const processingItems = items.filter(
+      i => i.bunny_video_id && i.bunny_video_status === 'processing'
+    );
+    if (processingItems.length === 0) return;
+
+    const updatedMap = {};
+
+    await Promise.all(
+      processingItems.map(async (item) => {
+        try {
+          const result = await getBunnyVideoStatus(item.bunny_video_id);
+          if (result.status === 'ready' || result.status === 'error') {
+            updatedMap[item.id] = result.status;
+            supabase
+              .from('content_items')
+              .update({ bunny_video_status: result.status })
+              .eq('id', item.id)
+              .then(() => {});
+            // Push notification is handled server-side by bunny-webhook
+          }
+        } catch (err) {
+          console.error('Error syncing video status for', item.bunny_video_id, err);
+        }
+      })
+    );
+
+    if (Object.keys(updatedMap).length > 0) {
+      onUpdates(updatedMap);
     }
   };
 
@@ -394,6 +442,8 @@ export const ContentProvider = ({ children }) => {
           quiz_link_label: itemData.quiz_link_label || null,
           is_downloadable: itemData.is_downloadable !== false,
           use_company_logo: itemData.use_company_logo || false,
+          bunny_video_id: itemData.bunny_video_id || null,
+          bunny_video_status: itemData.bunny_video_status || null,
           sort_order: maxOrder + 1,
           created_by: user?.id,
         })
@@ -463,6 +513,8 @@ export const ContentProvider = ({ children }) => {
           quiz_link_label: itemData.quiz_link_label || null,
           is_downloadable: itemData.is_downloadable !== false,
           use_company_logo: itemData.use_company_logo || false,
+          bunny_video_id: itemData.bunny_video_id || null,
+          bunny_video_status: itemData.bunny_video_status || null,
           sort_order: 0,
           created_by: user?.id,
         })
@@ -548,6 +600,17 @@ export const ContentProvider = ({ children }) => {
   // Delete a content item (removes from ALL categories)
   const deleteContentItem = async (itemId) => {
     try {
+      // Clean up Bunny video if one is attached
+      const allItems = [...libraryCategories, ...trainingCategories, ...formsCategories].flatMap(c => c.items);
+      const itemToDelete = allItems.find(i => i.id === itemId);
+      if (itemToDelete?.bunny_video_id) {
+        try {
+          await deleteBunnyVideo(itemToDelete.bunny_video_id);
+        } catch (bunnyErr) {
+          console.error('Failed to delete Bunny video (continuing):', bunnyErr);
+        }
+      }
+
       const { error } = await supabase
         .from('content_items')
         .delete()
@@ -590,6 +653,17 @@ export const ContentProvider = ({ children }) => {
 
       // If not in any category anymore, delete the content item too
       if (!remaining || remaining.length === 0) {
+        // Clean up Bunny video if one is attached
+        const allItems = [...libraryCategories, ...trainingCategories, ...formsCategories].flatMap(c => c.items);
+        const itemToDelete = allItems.find(i => i.id === itemId);
+        if (itemToDelete?.bunny_video_id) {
+          try {
+            await deleteBunnyVideo(itemToDelete.bunny_video_id);
+          } catch (bunnyErr) {
+            console.error('Failed to delete Bunny video (continuing):', bunnyErr);
+          }
+        }
+
         await supabase
           .from('content_items')
           .delete()

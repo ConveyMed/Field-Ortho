@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useContent } from '../context/ContentContext';
 import { supabase } from '../config/supabase';
+import { createBunnyVideo, uploadBunnyVideo, deleteBunnyVideo } from '../services/bunnyVideo';
 import {
   DndContext,
   closestCenter,
@@ -77,6 +78,13 @@ const CloseIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="18" y1="6" x2="6" y2="18" />
     <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
+const VideoIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="23 7 16 12 23 17 23 7" />
+    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
   </svg>
 );
 
@@ -307,13 +315,18 @@ const CategoryModal = ({ isOpen, onClose, onSave, category, title }) => {
 const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type }) => {
   const modalRef = React.useRef(null);
   const scrollYRef = React.useRef(0);
+  const tusUploadRef = useRef(null);
   const [formData, setFormData] = useState({
     title: '', description: '', thumbnail_url: '', file_url: '', file_name: '',
     external_link: '', external_link_label: '', quiz_link: '', quiz_link_label: '',
     is_downloadable: true, use_company_logo: false,
+    bunny_video_id: '', bunny_video_status: '',
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [videoUploading, setVideoUploading] = useState(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState(0);
+  const [videoUploadError, setVideoUploadError] = useState('');
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -360,12 +373,69 @@ const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type }) => {
         quiz_link_label: item?.quiz_link_label || '',
         is_downloadable: item?.is_downloadable !== false,
         use_company_logo: item?.use_company_logo || false,
+        bunny_video_id: item?.bunny_video_id || '',
+        bunny_video_status: item?.bunny_video_status || '',
       });
+      setVideoUploading(false);
+      setVideoUploadProgress(0);
+      setVideoUploadError('');
     }
   }, [isOpen, item]);
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleVideoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setVideoUploading(true);
+    setVideoUploadProgress(0);
+    setVideoUploadError('');
+    try {
+      const result = await createBunnyVideo(formData.title || file.name);
+      handleChange('bunny_video_id', result.videoId);
+      handleChange('bunny_video_status', 'uploading');
+
+      tusUploadRef.current = uploadBunnyVideo(
+        file,
+        result.tusConfig,
+        (progress) => setVideoUploadProgress(progress),
+        () => {
+          setVideoUploading(false);
+          setVideoUploadProgress(100);
+          handleChange('bunny_video_status', 'processing');
+        },
+        (error) => {
+          setVideoUploading(false);
+          setVideoUploadError('Upload failed. Please try again.');
+          console.error('Video upload error:', error);
+        }
+      );
+    } catch (err) {
+      setVideoUploading(false);
+      setVideoUploadError('Failed to start upload. Please try again.');
+      console.error('Error creating Bunny video:', err);
+    }
+  };
+
+  const handleRemoveVideo = async () => {
+    if (formData.bunny_video_id) {
+      try {
+        await deleteBunnyVideo(formData.bunny_video_id);
+      } catch (err) {
+        console.error('Failed to delete Bunny video:', err);
+      }
+    }
+    if (tusUploadRef.current) {
+      tusUploadRef.current.abort();
+      tusUploadRef.current = null;
+    }
+    handleChange('bunny_video_id', '');
+    handleChange('bunny_video_status', '');
+    setVideoUploading(false);
+    setVideoUploadProgress(0);
+    setVideoUploadError('');
   };
 
   const handleThumbnailUpload = async (e) => {
@@ -476,6 +546,37 @@ const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type }) => {
         </div>
 
         <div style={styles.formGroup}>
+          <label style={styles.label}>Private Video</label>
+          {formData.bunny_video_id ? (
+            <div style={styles.videoStatusContainer}>
+              <div style={styles.videoStatusRow}>
+                <VideoIcon />
+                <span style={styles.videoStatusText}>
+                  {videoUploading ? `Uploading... ${videoUploadProgress}%` :
+                   formData.bunny_video_status === 'processing' ? 'Submitted for processing - safe to save' :
+                   formData.bunny_video_status === 'ready' ? 'Ready' : 'Uploaded'}
+                </span>
+              </div>
+              {videoUploading && (
+                <div style={styles.videoProgressBar}>
+                  <div style={{ ...styles.videoProgressFill, width: `${videoUploadProgress}%` }} />
+                </div>
+              )}
+              <button style={styles.removeBtn} onClick={handleRemoveVideo}>Remove Video</button>
+            </div>
+          ) : (
+            <label style={styles.uploadBtn}>
+              <VideoIcon />
+              <span>{videoUploading ? `Uploading... ${videoUploadProgress}%` : 'Upload Video'}</span>
+              <input type="file" accept="video/*" onChange={handleVideoUpload} style={{ display: 'none' }} disabled={videoUploading} />
+            </label>
+          )}
+          {videoUploadError && (
+            <p style={styles.videoErrorText}>{videoUploadError}</p>
+          )}
+        </div>
+
+        <div style={styles.formGroup}>
           <label style={styles.label}>External Link</label>
           <input type="url" value={formData.external_link} onChange={e => handleChange('external_link', e.target.value)} style={styles.input} placeholder="https://..." />
           {formData.external_link && (
@@ -494,13 +595,13 @@ const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type }) => {
         <div style={styles.toggleGroup}>
           <div style={styles.toggleRow}>
             <span style={styles.toggleLabel}>Downloadable</span>
-            <button style={{ ...styles.toggle, backgroundColor: formData.is_downloadable ? 'var(--primary-blue)' : 'var(--border-light)' }} onClick={() => handleChange('is_downloadable', !formData.is_downloadable)}>
+            <button style={{ ...styles.toggle, backgroundColor: formData.is_downloadable ? '#1e40af' : '#e2e8f0' }} onClick={() => handleChange('is_downloadable', !formData.is_downloadable)}>
               <div style={{ ...styles.toggleKnob, transform: formData.is_downloadable ? 'translateX(20px)' : 'translateX(0)' }} />
             </button>
           </div>
           <div style={styles.toggleRow}>
             <span style={styles.toggleLabel}>Use Company Logo as Thumbnail</span>
-            <button style={{ ...styles.toggle, backgroundColor: formData.use_company_logo ? 'var(--primary-blue)' : 'var(--border-light)' }} onClick={() => handleChange('use_company_logo', !formData.use_company_logo)}>
+            <button style={{ ...styles.toggle, backgroundColor: formData.use_company_logo ? '#1e40af' : '#e2e8f0' }} onClick={() => handleChange('use_company_logo', !formData.use_company_logo)}>
               <div style={{ ...styles.toggleKnob, transform: formData.use_company_logo ? 'translateX(20px)' : 'translateX(0)' }} />
             </button>
           </div>
@@ -515,17 +616,22 @@ const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type }) => {
 };
 
 // Multi-Category Content Modal
-const MultiCategoryContentModal = ({ isOpen, onClose, onSave, libraryCategories, trainingCategories, formsCategories, type }) => {
+const MultiCategoryContentModal = ({ isOpen, onClose, onSave, libraryCategories, trainingCategories, type }) => {
   const modalRef = React.useRef(null);
   const scrollYRef = React.useRef(0);
+  const tusUploadRef = useRef(null);
   const [formData, setFormData] = useState({
     title: '', description: '', thumbnail_url: '', file_url: '', file_name: '',
     external_link: '', external_link_label: '', quiz_link: '', quiz_link_label: '',
     is_downloadable: true, use_company_logo: false,
+    bunny_video_id: '', bunny_video_status: '',
   });
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [videoUploading, setVideoUploading] = useState(false);
+  const [videoUploadProgress, setVideoUploadProgress] = useState(0);
+  const [videoUploadError, setVideoUploadError] = useState('');
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -557,8 +663,12 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, libraryCategories,
         title: '', description: '', thumbnail_url: '', file_url: '', file_name: '',
         external_link: '', external_link_label: '', quiz_link: '', quiz_link_label: '',
         is_downloadable: true, use_company_logo: false,
+        bunny_video_id: '', bunny_video_status: '',
       });
       setSelectedCategories([]);
+      setVideoUploading(false);
+      setVideoUploadProgress(0);
+      setVideoUploadError('');
     }
   }, [isOpen]);
 
@@ -581,6 +691,58 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, libraryCategories,
       }
       return [...prev, categoryId];
     });
+  };
+
+  const handleVideoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setVideoUploading(true);
+    setVideoUploadProgress(0);
+    setVideoUploadError('');
+    try {
+      const result = await createBunnyVideo(formData.title || file.name);
+      handleChange('bunny_video_id', result.videoId);
+      handleChange('bunny_video_status', 'uploading');
+
+      tusUploadRef.current = uploadBunnyVideo(
+        file,
+        result.tusConfig,
+        (progress) => setVideoUploadProgress(progress),
+        () => {
+          setVideoUploading(false);
+          setVideoUploadProgress(100);
+          handleChange('bunny_video_status', 'processing');
+        },
+        (error) => {
+          setVideoUploading(false);
+          setVideoUploadError('Upload failed. Please try again.');
+          console.error('Video upload error:', error);
+        }
+      );
+    } catch (err) {
+      setVideoUploading(false);
+      setVideoUploadError('Failed to start upload. Please try again.');
+      console.error('Error creating Bunny video:', err);
+    }
+  };
+
+  const handleRemoveVideo = async () => {
+    if (formData.bunny_video_id) {
+      try {
+        await deleteBunnyVideo(formData.bunny_video_id);
+      } catch (err) {
+        console.error('Failed to delete Bunny video:', err);
+      }
+    }
+    if (tusUploadRef.current) {
+      tusUploadRef.current.abort();
+      tusUploadRef.current = null;
+    }
+    handleChange('bunny_video_id', '');
+    handleChange('bunny_video_status', '');
+    setVideoUploading(false);
+    setVideoUploadProgress(0);
+    setVideoUploadError('');
   };
 
   const handleThumbnailUpload = async (e) => {
@@ -689,23 +851,6 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, libraryCategories,
             </div>
           )}
 
-          {formsCategories.length > 0 && (
-            <div style={styles.categorySection}>
-              <div style={styles.categorySectionTitle}>Forms</div>
-              {formsCategories.map(cat => (
-                <label key={cat.id} style={styles.checkboxRow}>
-                  <input
-                    type="checkbox"
-                    checked={selectedCategories.includes(cat.id)}
-                    onChange={() => toggleCategory(cat.id)}
-                    style={styles.checkbox}
-                  />
-                  <span style={styles.checkboxLabel}>{cat.title}</span>
-                </label>
-              ))}
-            </div>
-          )}
-
           {selectedCategories.length > 0 && (
             <div style={styles.selectedCount}>
               {selectedCategories.length} categor{selectedCategories.length === 1 ? 'y' : 'ies'} selected
@@ -756,6 +901,37 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, libraryCategories,
         </div>
 
         <div style={styles.formGroup}>
+          <label style={styles.label}>Private Video</label>
+          {formData.bunny_video_id ? (
+            <div style={styles.videoStatusContainer}>
+              <div style={styles.videoStatusRow}>
+                <VideoIcon />
+                <span style={styles.videoStatusText}>
+                  {videoUploading ? `Uploading... ${videoUploadProgress}%` :
+                   formData.bunny_video_status === 'processing' ? 'Submitted for processing - safe to save' :
+                   formData.bunny_video_status === 'ready' ? 'Ready' : 'Uploaded'}
+                </span>
+              </div>
+              {videoUploading && (
+                <div style={styles.videoProgressBar}>
+                  <div style={{ ...styles.videoProgressFill, width: `${videoUploadProgress}%` }} />
+                </div>
+              )}
+              <button style={styles.removeBtn} onClick={handleRemoveVideo}>Remove Video</button>
+            </div>
+          ) : (
+            <label style={styles.uploadBtn}>
+              <VideoIcon />
+              <span>{videoUploading ? `Uploading... ${videoUploadProgress}%` : 'Upload Video'}</span>
+              <input type="file" accept="video/*" onChange={handleVideoUpload} style={{ display: 'none' }} disabled={videoUploading} />
+            </label>
+          )}
+          {videoUploadError && (
+            <p style={styles.videoErrorText}>{videoUploadError}</p>
+          )}
+        </div>
+
+        <div style={styles.formGroup}>
           <label style={styles.label}>External Link</label>
           <input type="url" value={formData.external_link} onChange={e => handleChange('external_link', e.target.value)} style={styles.input} placeholder="https://..." />
           {formData.external_link && (
@@ -774,13 +950,13 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, libraryCategories,
         <div style={styles.toggleGroup}>
           <div style={styles.toggleRow}>
             <span style={styles.toggleLabel}>Downloadable</span>
-            <button style={{ ...styles.toggle, backgroundColor: formData.is_downloadable ? 'var(--primary-blue)' : 'var(--border-light)' }} onClick={() => handleChange('is_downloadable', !formData.is_downloadable)}>
+            <button style={{ ...styles.toggle, backgroundColor: formData.is_downloadable ? '#1e40af' : '#e2e8f0' }} onClick={() => handleChange('is_downloadable', !formData.is_downloadable)}>
               <div style={{ ...styles.toggleKnob, transform: formData.is_downloadable ? 'translateX(20px)' : 'translateX(0)' }} />
             </button>
           </div>
           <div style={styles.toggleRow}>
             <span style={styles.toggleLabel}>Use Company Logo as Thumbnail</span>
-            <button style={{ ...styles.toggle, backgroundColor: formData.use_company_logo ? 'var(--primary-blue)' : 'var(--border-light)' }} onClick={() => handleChange('use_company_logo', !formData.use_company_logo)}>
+            <button style={{ ...styles.toggle, backgroundColor: formData.use_company_logo ? '#1e40af' : '#e2e8f0' }} onClick={() => handleChange('use_company_logo', !formData.use_company_logo)}>
               <div style={{ ...styles.toggleKnob, transform: formData.use_company_logo ? 'translateX(20px)' : 'translateX(0)' }} />
             </button>
           </div>
@@ -798,14 +974,14 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, libraryCategories,
 const ManageContentScreen = ({ type, title, backPath }) => {
   const navigate = useNavigate();
   const {
-    libraryCategories, trainingCategories, formsCategories,
+    libraryCategories, trainingCategories,
     addCategory, updateCategory, deleteCategory,
     addContentItem, addContentToCategories, updateContentItem, deleteContentItem,
     removeContentFromCategory,
     reorderCategories, reorderContentItems,
   } = useContent();
 
-  const categories = type === 'library' ? libraryCategories : type === 'forms' ? formsCategories : trainingCategories;
+  const categories = type === 'library' ? libraryCategories : trainingCategories;
 
   const [categoryModal, setCategoryModal] = useState({ open: false, category: null });
   const [contentModal, setContentModal] = useState({ open: false, item: null, categoryId: null });
@@ -915,7 +1091,7 @@ const ManageContentScreen = ({ type, title, backPath }) => {
                       onEditContent={(item) => setContentModal({ open: true, item, categoryId: category.id })}
                       onDeleteContent={(item) => {
                         // Count how many categories this item is in
-                        const allCats = [...libraryCategories, ...trainingCategories, ...formsCategories];
+                        const allCats = [...libraryCategories, ...trainingCategories];
                         const categoryCount = allCats.filter(c => c.items.some(i => i.id === item.id)).length;
                         setDeleteConfirm({ open: true, type: 'content', id: item.id, name: item.title, categoryId: category.id, isMultiCategory: categoryCount > 1 });
                       }}
@@ -971,7 +1147,6 @@ const ManageContentScreen = ({ type, title, backPath }) => {
         onSave={handleSaveMultiCategoryContent}
         libraryCategories={libraryCategories}
         trainingCategories={trainingCategories}
-        formsCategories={formsCategories}
         type={type}
       />
 
@@ -1006,80 +1181,87 @@ const ManageContentScreen = ({ type, title, backPath }) => {
 };
 
 const styles = {
-  container: { minHeight: '100%', backgroundColor: 'var(--background-off-white)', display: 'flex', flexDirection: 'column' },
+  container: { minHeight: '100%', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column' },
   header: { width: '100%', backgroundColor: '#ffffff', position: 'sticky', top: 0, zIndex: 100 },
   headerInner: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px 8px 16px', maxWidth: '600px', margin: '0 auto' },
-  headerTitle: { color: 'var(--primary-blue)', fontSize: '20px', fontWeight: '700', margin: 0, textAlign: 'center' },
-  headerBorder: { maxWidth: '600px', margin: '0 auto', height: '2px', backgroundColor: 'rgba(var(--primary-blue-rgb), 0.15)', borderRadius: '1px' },
-  backBtn: { width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--primary-blue)', borderRadius: '10px' },
+  headerTitle: { color: '#1e40af', fontSize: '20px', fontWeight: '700', margin: 0, textAlign: 'center' },
+  headerBorder: { maxWidth: '600px', margin: '0 auto', height: '2px', backgroundColor: 'rgba(30, 64, 175, 0.15)', borderRadius: '1px' },
+  backBtn: { width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent', border: 'none', cursor: 'pointer', color: '#1e40af', borderRadius: '10px' },
   contentContainer: { flex: 1, display: 'flex', justifyContent: 'center', overflow: 'auto' },
   content: { width: '100%', maxWidth: '600px', padding: '16px' },
-  addCategoryBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '14px', backgroundColor: 'var(--primary-blue)', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', marginBottom: '12px' },
-  addMultiContentBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '14px', backgroundColor: '#ffffff', color: 'var(--primary-blue)', border: '2px solid var(--primary-blue)', borderRadius: '12px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', marginBottom: '20px' },
+  addCategoryBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '14px', backgroundColor: '#1e40af', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', marginBottom: '12px' },
+  addMultiContentBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '14px', backgroundColor: '#ffffff', color: '#1e40af', border: '2px solid #1e40af', borderRadius: '12px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', marginBottom: '20px' },
   categoriesList: { display: 'flex', flexDirection: 'column', gap: '12px' },
   categoryCard: { backgroundColor: '#ffffff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)' },
   categoryHeader: { display: 'flex', alignItems: 'center', gap: '12px', padding: '16px' },
-  dragHandle: { color: 'var(--text-light)', cursor: 'grab', padding: '4px', touchAction: 'none' },
-  dragHandleSmall: { color: 'var(--text-light)', cursor: 'grab', padding: '2px', touchAction: 'none' },
+  dragHandle: { color: '#94a3b8', cursor: 'grab', padding: '4px', touchAction: 'none' },
+  dragHandleSmall: { color: '#94a3b8', cursor: 'grab', padding: '2px', touchAction: 'none' },
   categoryInfo: { flex: 1, cursor: 'pointer' },
-  categoryName: { fontSize: '16px', fontWeight: '600', color: 'var(--text-dark)', margin: 0 },
-  categoryCount: { fontSize: '13px', color: 'var(--text-muted)' },
-  categoryActions: { display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)' },
+  categoryName: { fontSize: '16px', fontWeight: '600', color: '#1e293b', margin: 0 },
+  categoryCount: { fontSize: '13px', color: '#64748b' },
+  categoryActions: { display: 'flex', alignItems: 'center', gap: '8px', color: '#64748b' },
   expandIcon: { transition: 'transform 0.2s', cursor: 'pointer', padding: '4px' },
-  iconBtn: { width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-light)', border: 'none', borderRadius: '8px', cursor: 'pointer', color: 'var(--text-muted)' },
+  iconBtn: { width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', border: 'none', borderRadius: '8px', cursor: 'pointer', color: '#64748b' },
   categoryContent: { padding: '0 16px 16px 16px', borderTop: '1px solid #f1f5f9' },
-  addContentBtn: { display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', backgroundColor: 'var(--bg-light)', color: 'var(--primary-blue)', border: '1px dashed #cbd5e1', borderRadius: '10px', fontSize: '14px', fontWeight: '500', cursor: 'pointer', marginBottom: '12px', marginTop: '12px', width: '100%', justifyContent: 'center' },
+  addContentBtn: { display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', backgroundColor: '#f1f5f9', color: '#1e40af', border: '1px dashed #cbd5e1', borderRadius: '10px', fontSize: '14px', fontWeight: '500', cursor: 'pointer', marginBottom: '12px', marginTop: '12px', width: '100%', justifyContent: 'center' },
   itemsList: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  itemCard: { display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', backgroundColor: 'var(--background-off-white)', borderRadius: '10px' },
-  itemThumbnail: { width: '48px', height: '48px', borderRadius: '8px', overflow: 'hidden', backgroundColor: 'var(--border-light)', flexShrink: 0 },
+  itemCard: { display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '10px' },
+  itemThumbnail: { width: '48px', height: '48px', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#e2e8f0', flexShrink: 0 },
   itemThumbImage: { width: '100%', height: '100%', objectFit: 'cover' },
-  itemThumbPlaceholder: { width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-light)' },
+  itemThumbPlaceholder: { width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' },
   itemInfo: { flex: 1, minWidth: 0 },
-  itemTitle: { fontSize: '14px', fontWeight: '500', color: 'var(--text-dark)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  itemDesc: { fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  itemTitle: { fontSize: '14px', fontWeight: '500', color: '#1e293b', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  itemDesc: { fontSize: '12px', color: '#64748b', margin: '2px 0 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   itemActions: { display: 'flex', gap: '6px' },
-  noItems: { color: 'var(--text-light)', fontSize: '14px', fontStyle: 'italic', textAlign: 'center', padding: '12px' },
+  noItems: { color: '#94a3b8', fontSize: '14px', fontStyle: 'italic', textAlign: 'center', padding: '12px' },
   emptyState: { textAlign: 'center', padding: '40px 20px' },
-  emptyText: { color: 'var(--text-muted)', fontSize: '15px' },
+  emptyText: { color: '#64748b', fontSize: '15px' },
   modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '20px', paddingTop: 'calc(20px + env(safe-area-inset-top, 0px))', paddingBottom: 'calc(100px + env(safe-area-inset-bottom, 0px))' },
   modal: { backgroundColor: '#ffffff', borderRadius: '20px', padding: '24px', maxWidth: '400px', width: '100%', position: 'relative', maxHeight: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch' },
-  closeBtn: { position: 'absolute', top: '16px', right: '16px', width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'var(--bg-light)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' },
-  modalTitle: { fontSize: '20px', fontWeight: '600', color: 'var(--text-dark)', margin: '0 0 20px 0', paddingRight: '40px' },
+  closeBtn: { position: 'absolute', top: '16px', right: '16px', width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' },
+  modalTitle: { fontSize: '20px', fontWeight: '600', color: '#1e293b', margin: '0 0 20px 0', paddingRight: '40px' },
   formGroup: { marginBottom: '16px' },
-  label: { display: 'block', fontSize: '13px', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '6px' },
+  label: { display: 'block', fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' },
   input: { width: '100%', padding: '12px 14px', fontSize: '15px', border: '1px solid #e2e8f0', borderRadius: '10px', outline: 'none', boxSizing: 'border-box' },
   textarea: { width: '100%', padding: '12px 14px', fontSize: '15px', border: '1px solid #e2e8f0', borderRadius: '10px', outline: 'none', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' },
-  saveBtn: { width: '100%', padding: '14px', backgroundColor: 'var(--primary-blue)', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', marginTop: '8px' },
-  uploadBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', backgroundColor: 'var(--background-off-white)', border: '1px dashed #cbd5e1', borderRadius: '10px', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '14px' },
+  saveBtn: { width: '100%', padding: '14px', backgroundColor: '#1e40af', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', marginTop: '8px' },
+  uploadBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '10px', cursor: 'pointer', color: '#64748b', fontSize: '14px' },
   thumbnailPreview: { display: 'flex', alignItems: 'center', gap: '12px' },
   previewImage: { width: '80px', height: '80px', borderRadius: '10px', objectFit: 'cover' },
-  filePreview: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', backgroundColor: 'var(--background-off-white)', borderRadius: '10px', fontSize: '14px', color: 'var(--text-dark)' },
+  filePreview: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '10px', fontSize: '14px', color: '#1e293b' },
   removeBtn: { padding: '6px 12px', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' },
   toggleGroup: { marginBottom: '16px' },
   toggleRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f1f5f9' },
-  toggleLabel: { fontSize: '14px', color: 'var(--text-dark)' },
+  toggleLabel: { fontSize: '14px', color: '#1e293b' },
   toggle: { width: '48px', height: '28px', borderRadius: '14px', border: 'none', cursor: 'pointer', position: 'relative', transition: 'background-color 0.2s ease', padding: 0 },
   toggleKnob: { width: '24px', height: '24px', borderRadius: '12px', backgroundColor: '#ffffff', position: 'absolute', top: '2px', left: '2px', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.2)', transition: 'transform 0.2s ease' },
-  deleteText: { fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.5', margin: 0, padding: '0 16px 16px', textAlign: 'center' },
+  deleteText: { fontSize: '13px', color: '#64748b', lineHeight: '1.5', margin: 0, padding: '0 16px 16px', textAlign: 'center' },
   deleteActions: { display: 'flex', gap: '12px' },
-  cancelBtn: { flex: 1, padding: '12px', backgroundColor: 'var(--bg-light)', color: 'var(--text-dark)', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+  cancelBtn: { flex: 1, padding: '12px', backgroundColor: '#f1f5f9', color: '#1e293b', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
   removeBtn: { flex: 1, padding: '12px', backgroundColor: '#f59e0b', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
   deleteBtn: { flex: 1, padding: '12px', backgroundColor: '#dc2626', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
   // iOS-style delete modal
   deleteModal: { backgroundColor: '#ffffff', borderRadius: '14px', width: '100%', maxWidth: '300px', overflow: 'hidden' },
-  deleteModalTitle: { fontSize: '17px', fontWeight: '600', color: 'var(--text-dark)', margin: 0, padding: '20px 16px 8px', textAlign: 'center' },
+  deleteModalTitle: { fontSize: '17px', fontWeight: '600', color: '#1e293b', margin: 0, padding: '20px 16px 8px', textAlign: 'center' },
   deleteActionsVertical: { display: 'flex', flexDirection: 'column', borderTop: '1px solid #e2e8f0', marginTop: '16px' },
   removeBtnFull: { width: '100%', padding: '14px 16px', backgroundColor: 'transparent', color: '#f59e0b', border: 'none', borderBottom: '1px solid #e2e8f0', fontSize: '17px', fontWeight: '400', cursor: 'pointer' },
   deleteBtnFull: { width: '100%', padding: '14px 16px', backgroundColor: 'transparent', color: '#dc2626', border: 'none', borderBottom: '1px solid #e2e8f0', fontSize: '17px', fontWeight: '600', cursor: 'pointer' },
   cancelBtnFull: { width: '100%', padding: '14px 16px', backgroundColor: 'transparent', color: '#007aff', border: 'none', fontSize: '17px', fontWeight: '600', cursor: 'pointer' },
   // Multi-category modal styles
-  categoryHint: { fontSize: '13px', color: 'var(--text-muted)', margin: '0 0 12px 0' },
-  categorySection: { marginBottom: '16px', padding: '12px', backgroundColor: 'var(--background-off-white)', borderRadius: '10px' },
-  categorySectionTitle: { fontSize: '13px', fontWeight: '600', color: 'var(--primary-blue)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' },
+  categoryHint: { fontSize: '13px', color: '#64748b', margin: '0 0 12px 0' },
+  categorySection: { marginBottom: '16px', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '10px' },
+  categorySectionTitle: { fontSize: '13px', fontWeight: '600', color: '#1e40af', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' },
   checkboxRow: { display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0', cursor: 'pointer' },
-  checkbox: { width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--primary-blue)' },
-  checkboxLabel: { fontSize: '14px', color: 'var(--text-dark)' },
+  checkbox: { width: '18px', height: '18px', cursor: 'pointer', accentColor: '#1e40af' },
+  checkboxLabel: { fontSize: '14px', color: '#1e293b' },
   selectedCount: { fontSize: '13px', color: '#059669', fontWeight: '500', padding: '8px 12px', backgroundColor: '#ecfdf5', borderRadius: '8px', textAlign: 'center' },
+  // Video upload styles
+  videoStatusContainer: { padding: '12px', backgroundColor: '#f8fafc', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '10px' },
+  videoStatusRow: { display: 'flex', alignItems: 'center', gap: '10px', color: '#1e293b' },
+  videoStatusText: { fontSize: '14px', fontWeight: '500' },
+  videoProgressBar: { width: '100%', height: '6px', backgroundColor: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' },
+  videoProgressFill: { height: '100%', backgroundColor: '#1e40af', borderRadius: '3px', transition: 'width 0.3s ease' },
+  videoErrorText: { color: '#dc2626', fontSize: '13px', margin: '6px 0 0 0' },
 };
 
 export default ManageContentScreen;
