@@ -985,7 +985,9 @@ const ManageContentScreen = ({ type, title, backPath }) => {
     } else {
       savedItem = await addContentItem(contentModal.categoryId, data);
     }
+    console.log('handleSaveContent - pendingVideo:', pendingVideo, 'savedItem:', savedItem);
     if (pendingVideo && savedItem?.id) {
+      console.log('Starting background upload for', savedItem.id);
       startBackgroundUpload(savedItem.id, pendingVideo.file, pendingVideo.tusConfig);
     }
   };

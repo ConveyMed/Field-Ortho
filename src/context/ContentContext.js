@@ -22,6 +22,7 @@ export const ContentProvider = ({ children }) => {
 
   // Start a background video upload for a saved content item
   const startBackgroundUpload = (contentItemId, file, tusConfig) => {
+    console.log('startBackgroundUpload called:', { contentItemId, fileName: file?.name, fileSize: file?.size, tusConfig });
     const upload = uploadBunnyVideo(
       file,
       tusConfig,
