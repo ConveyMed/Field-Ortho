@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useContent } from '../context/ContentContext';
 import { supabase } from '../config/supabase';
-import { createBunnyVideo, uploadBunnyVideo, deleteBunnyVideo } from '../services/bunnyVideo';
+import { deleteBunnyVideo } from '../services/bunnyVideo';
 import {
   DndContext,
   closestCenter,
@@ -315,17 +315,17 @@ const CategoryModal = ({ isOpen, onClose, onSave, category, title }) => {
 const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type }) => {
   const modalRef = React.useRef(null);
   const scrollYRef = React.useRef(0);
-  const tusUploadRef = useRef(null);
+  const { prepareVideoUpload } = useContent();
   const [formData, setFormData] = useState({
     title: '', description: '', thumbnail_url: '', file_url: '', file_name: '',
     external_link: '', external_link_label: '', quiz_link: '', quiz_link_label: '',
     is_downloadable: true, use_company_logo: false,
     bunny_video_id: '', bunny_video_status: '',
   });
+  const [pendingVideoUpload, setPendingVideoUpload] = useState(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [videoUploading, setVideoUploading] = useState(false);
-  const [videoUploadProgress, setVideoUploadProgress] = useState(0);
+  const [videoCreating, setVideoCreating] = useState(false);
   const [videoUploadError, setVideoUploadError] = useState('');
 
   // Lock body scroll when modal is open
@@ -376,8 +376,8 @@ const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type }) => {
         bunny_video_id: item?.bunny_video_id || '',
         bunny_video_status: item?.bunny_video_status || '',
       });
-      setVideoUploading(false);
-      setVideoUploadProgress(0);
+      setPendingVideoUpload(null);
+      setVideoCreating(false);
       setVideoUploadError('');
     }
   }, [isOpen, item]);
@@ -389,52 +389,39 @@ const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type }) => {
   const handleVideoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setVideoUploading(true);
-    setVideoUploadProgress(0);
+    setVideoCreating(true);
     setVideoUploadError('');
     try {
-      const result = await createBunnyVideo(formData.title || file.name);
+      const result = await prepareVideoUpload(formData.title || file.name, file);
       handleChange('bunny_video_id', result.videoId);
       handleChange('bunny_video_status', 'uploading');
-
-      tusUploadRef.current = uploadBunnyVideo(
-        file,
-        result.tusConfig,
-        (progress) => setVideoUploadProgress(progress),
-        () => {
-          setVideoUploading(false);
-          setVideoUploadProgress(100);
-          handleChange('bunny_video_status', 'processing');
-        },
-        (error) => {
-          setVideoUploading(false);
-          setVideoUploadError('Upload failed. Please try again.');
-          console.error('Video upload error:', error);
-        }
-      );
+      setPendingVideoUpload(result);
+      setVideoCreating(false);
     } catch (err) {
-      setVideoUploading(false);
-      setVideoUploadError('Failed to start upload. Please try again.');
-      console.error('Error creating Bunny video:', err);
+      setVideoCreating(false);
+      setVideoUploadError('Failed to prepare video. Please try again.');
+      console.error('Error preparing video:', err);
     }
   };
 
   const handleRemoveVideo = async () => {
-    if (formData.bunny_video_id) {
+    if (formData.bunny_video_id && !pendingVideoUpload) {
       try {
         await deleteBunnyVideo(formData.bunny_video_id);
       } catch (err) {
         console.error('Failed to delete Bunny video:', err);
       }
     }
-    if (tusUploadRef.current) {
-      tusUploadRef.current.abort();
-      tusUploadRef.current = null;
+    if (pendingVideoUpload && formData.bunny_video_id) {
+      try {
+        await deleteBunnyVideo(formData.bunny_video_id);
+      } catch (err) {
+        console.error('Failed to delete Bunny video:', err);
+      }
     }
     handleChange('bunny_video_id', '');
     handleChange('bunny_video_status', '');
-    setVideoUploading(false);
-    setVideoUploadProgress(0);
+    setPendingVideoUpload(null);
     setVideoUploadError('');
   };
 
@@ -483,7 +470,7 @@ const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type }) => {
     if (!formData.title.trim()) return;
     setSaving(true);
     try {
-      await onSave(formData);
+      await onSave(formData, pendingVideoUpload);
       onClose();
     } catch (err) {
       console.error('Error saving content:', err);
@@ -552,23 +539,18 @@ const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type }) => {
               <div style={styles.videoStatusRow}>
                 <VideoIcon />
                 <span style={styles.videoStatusText}>
-                  {videoUploading ? `Uploading... ${videoUploadProgress}%` :
-                   formData.bunny_video_status === 'processing' ? 'Submitted for processing - safe to save' :
+                  {pendingVideoUpload ? 'Video ready - will upload in background after save' :
+                   formData.bunny_video_status === 'processing' ? 'Processing' :
                    formData.bunny_video_status === 'ready' ? 'Ready' : 'Uploaded'}
                 </span>
               </div>
-              {videoUploading && (
-                <div style={styles.videoProgressBar}>
-                  <div style={{ ...styles.videoProgressFill, width: `${videoUploadProgress}%` }} />
-                </div>
-              )}
               <button style={styles.removeBtn} onClick={handleRemoveVideo}>Remove Video</button>
             </div>
           ) : (
             <label style={styles.uploadBtn}>
               <VideoIcon />
-              <span>{videoUploading ? `Uploading... ${videoUploadProgress}%` : 'Upload Video'}</span>
-              <input type="file" accept="video/*" onChange={handleVideoUpload} style={{ display: 'none' }} disabled={videoUploading} />
+              <span>{videoCreating ? 'Preparing...' : 'Upload Video'}</span>
+              <input type="file" accept="video/*" onChange={handleVideoUpload} style={{ display: 'none' }} disabled={videoCreating} />
             </label>
           )}
           {videoUploadError && (
@@ -619,18 +601,18 @@ const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type }) => {
 const MultiCategoryContentModal = ({ isOpen, onClose, onSave, libraryCategories, trainingCategories, type }) => {
   const modalRef = React.useRef(null);
   const scrollYRef = React.useRef(0);
-  const tusUploadRef = useRef(null);
+  const { prepareVideoUpload } = useContent();
   const [formData, setFormData] = useState({
     title: '', description: '', thumbnail_url: '', file_url: '', file_name: '',
     external_link: '', external_link_label: '', quiz_link: '', quiz_link_label: '',
     is_downloadable: true, use_company_logo: false,
     bunny_video_id: '', bunny_video_status: '',
   });
+  const [pendingVideoUpload, setPendingVideoUpload] = useState(null);
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [videoUploading, setVideoUploading] = useState(false);
-  const [videoUploadProgress, setVideoUploadProgress] = useState(0);
+  const [videoCreating, setVideoCreating] = useState(false);
   const [videoUploadError, setVideoUploadError] = useState('');
 
   // Lock body scroll when modal is open
@@ -666,8 +648,8 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, libraryCategories,
         bunny_video_id: '', bunny_video_status: '',
       });
       setSelectedCategories([]);
-      setVideoUploading(false);
-      setVideoUploadProgress(0);
+      setPendingVideoUpload(null);
+      setVideoCreating(false);
       setVideoUploadError('');
     }
   }, [isOpen]);
@@ -696,33 +678,18 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, libraryCategories,
   const handleVideoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setVideoUploading(true);
-    setVideoUploadProgress(0);
+    setVideoCreating(true);
     setVideoUploadError('');
     try {
-      const result = await createBunnyVideo(formData.title || file.name);
+      const result = await prepareVideoUpload(formData.title || file.name, file);
       handleChange('bunny_video_id', result.videoId);
       handleChange('bunny_video_status', 'uploading');
-
-      tusUploadRef.current = uploadBunnyVideo(
-        file,
-        result.tusConfig,
-        (progress) => setVideoUploadProgress(progress),
-        () => {
-          setVideoUploading(false);
-          setVideoUploadProgress(100);
-          handleChange('bunny_video_status', 'processing');
-        },
-        (error) => {
-          setVideoUploading(false);
-          setVideoUploadError('Upload failed. Please try again.');
-          console.error('Video upload error:', error);
-        }
-      );
+      setPendingVideoUpload(result);
+      setVideoCreating(false);
     } catch (err) {
-      setVideoUploading(false);
-      setVideoUploadError('Failed to start upload. Please try again.');
-      console.error('Error creating Bunny video:', err);
+      setVideoCreating(false);
+      setVideoUploadError('Failed to prepare video. Please try again.');
+      console.error('Error preparing video:', err);
     }
   };
 
@@ -734,14 +701,9 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, libraryCategories,
         console.error('Failed to delete Bunny video:', err);
       }
     }
-    if (tusUploadRef.current) {
-      tusUploadRef.current.abort();
-      tusUploadRef.current = null;
-    }
     handleChange('bunny_video_id', '');
     handleChange('bunny_video_status', '');
-    setVideoUploading(false);
-    setVideoUploadProgress(0);
+    setPendingVideoUpload(null);
     setVideoUploadError('');
   };
 
@@ -790,7 +752,7 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, libraryCategories,
     if (!formData.title.trim() || selectedCategories.length === 0) return;
     setSaving(true);
     try {
-      await onSave(formData, selectedCategories);
+      await onSave(formData, selectedCategories, pendingVideoUpload);
       onClose();
     } catch (err) {
       console.error('Error saving content:', err);
@@ -907,23 +869,18 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, libraryCategories,
               <div style={styles.videoStatusRow}>
                 <VideoIcon />
                 <span style={styles.videoStatusText}>
-                  {videoUploading ? `Uploading... ${videoUploadProgress}%` :
-                   formData.bunny_video_status === 'processing' ? 'Submitted for processing - safe to save' :
+                  {pendingVideoUpload ? 'Video ready - will upload in background after save' :
+                   formData.bunny_video_status === 'processing' ? 'Processing' :
                    formData.bunny_video_status === 'ready' ? 'Ready' : 'Uploaded'}
                 </span>
               </div>
-              {videoUploading && (
-                <div style={styles.videoProgressBar}>
-                  <div style={{ ...styles.videoProgressFill, width: `${videoUploadProgress}%` }} />
-                </div>
-              )}
               <button style={styles.removeBtn} onClick={handleRemoveVideo}>Remove Video</button>
             </div>
           ) : (
             <label style={styles.uploadBtn}>
               <VideoIcon />
-              <span>{videoUploading ? `Uploading... ${videoUploadProgress}%` : 'Upload Video'}</span>
-              <input type="file" accept="video/*" onChange={handleVideoUpload} style={{ display: 'none' }} disabled={videoUploading} />
+              <span>{videoCreating ? 'Preparing...' : 'Upload Video'}</span>
+              <input type="file" accept="video/*" onChange={handleVideoUpload} style={{ display: 'none' }} disabled={videoCreating} />
             </label>
           )}
           {videoUploadError && (
@@ -979,6 +936,7 @@ const ManageContentScreen = ({ type, title, backPath }) => {
     addContentItem, addContentToCategories, updateContentItem, deleteContentItem,
     removeContentFromCategory,
     reorderCategories, reorderContentItems,
+    startBackgroundUpload, videoUploads,
   } = useContent();
 
   const categories = type === 'library' ? libraryCategories : trainingCategories;
@@ -1019,16 +977,24 @@ const ManageContentScreen = ({ type, title, backPath }) => {
     }
   };
 
-  const handleSaveContent = async (data) => {
+  const handleSaveContent = async (data, pendingVideo) => {
+    let savedItem;
     if (contentModal.item) {
       await updateContentItem(contentModal.item.id, data);
+      savedItem = contentModal.item;
     } else {
-      await addContentItem(contentModal.categoryId, data);
+      savedItem = await addContentItem(contentModal.categoryId, data);
+    }
+    if (pendingVideo && savedItem?.id) {
+      startBackgroundUpload(savedItem.id, pendingVideo.file, pendingVideo.tusConfig);
     }
   };
 
-  const handleSaveMultiCategoryContent = async (data, selectedCategoryIds) => {
-    await addContentToCategories(data, selectedCategoryIds);
+  const handleSaveMultiCategoryContent = async (data, selectedCategoryIds, pendingVideo) => {
+    const savedItem = await addContentToCategories(data, selectedCategoryIds);
+    if (pendingVideo && savedItem?.id) {
+      startBackgroundUpload(savedItem.id, pendingVideo.file, pendingVideo.tusConfig);
+    }
   };
 
   const confirmDelete = async (deleteEverywhere = true) => {
