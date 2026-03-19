@@ -161,6 +161,11 @@ const ContentCard = ({ item, onClick, isDownloaded, downloadProgress }) => {
             <CheckIcon />
           </div>
         )}
+        {item.bunny_video_id && (
+          <div style={styles.videoBadge}>
+            <VideoBadgeIcon />
+          </div>
+        )}
       </div>
       <p style={styles.cardTitle}>{item.title}</p>
     </div>
@@ -195,6 +200,10 @@ const ContentModal = ({ item, onClose, isDownloaded, onDownload, downloadProgres
   const modalRef = React.useRef(null);
   const overlayRef = React.useRef(null);
   const scrollYRef = React.useRef(0);
+  const [showVideoPlayer, setShowVideoPlayer] = useState(false);
+  const [videoEmbedUrl, setVideoEmbedUrl] = useState('');
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [videoStatus, setVideoStatus] = useState(null);
 
   // Lock body scroll when modal is open
   React.useEffect(() => {
@@ -206,6 +215,11 @@ const ContentModal = ({ item, onClose, isDownloaded, onDownload, downloadProgres
       document.body.style.right = '0';
       document.body.style.overflow = 'hidden';
       document.body.style.width = '100%';
+
+      // Reset video state when item changes
+      setShowVideoPlayer(false);
+      setVideoEmbedUrl('');
+      setVideoStatus(item?.bunny_video_status || null);
 
       return () => {
         document.body.style.position = '';
@@ -219,6 +233,33 @@ const ContentModal = ({ item, onClose, isDownloaded, onDownload, downloadProgres
     }
   }, [item]);
 
+  // Poll for video status when processing (check immediately, then every 15s)
+  React.useEffect(() => {
+    if (!item?.bunny_video_id || videoStatus !== 'processing') return;
+
+    const checkStatus = async () => {
+      try {
+        const result = await getBunnyVideoStatus(item.bunny_video_id);
+        if (result.status === 'ready') {
+          setVideoStatus('ready');
+          clearInterval(interval);
+          // Persist to Supabase so we don't poll next time
+          supabase.from('content_items')
+            .update({ bunny_video_status: 'ready' })
+            .eq('id', item.id)
+            .then(() => {});
+        }
+      } catch (err) {
+        console.error('Error polling video status:', err);
+      }
+    };
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 15000);
+
+    return () => clearInterval(interval);
+  }, [item?.bunny_video_id, videoStatus]);
+
   // Prevent touch scroll on overlay (allow only on modal)
   const handleTouchMove = React.useCallback((e) => {
     if (modalRef.current && modalRef.current.contains(e.target)) {
@@ -228,146 +269,212 @@ const ContentModal = ({ item, onClose, isDownloaded, onDownload, downloadProgres
     e.preventDefault();
   }, []);
 
+  const handlePlayVideo = useCallback(async () => {
+    if (!item?.bunny_video_id) return;
+    setVideoLoading(true);
+    try {
+      const embedUrl = await getSecureEmbedUrl(item.bunny_video_id);
+      setVideoEmbedUrl(embedUrl);
+      setShowVideoPlayer(true);
+      onAssetEvent && onAssetEvent('video_play');
+    } catch (err) {
+      console.error('Error getting embed URL:', err);
+      alert('Failed to load video. Please try again.');
+    } finally {
+      setVideoLoading(false);
+    }
+  }, [item?.bunny_video_id, onAssetEvent]);
+
   if (!item) return null;
 
   const isDownloading = downloadProgress !== undefined;
+  const isVideoReady = item.bunny_video_id && (videoStatus === 'ready' || item.bunny_video_status === 'ready');
+  const isVideoProcessing = item.bunny_video_id && !isVideoReady;
 
-  return (
-    <div
-      ref={overlayRef}
-      style={styles.modalOverlay}
-      onClick={onClose}
-      onTouchMove={handleTouchMove}
-    >
-      <div ref={modalRef} style={styles.modal} onClick={e => e.stopPropagation()}>
-        {/* Close button */}
-        <button style={styles.closeBtn} onClick={onClose}>
-          <CloseIcon />
-        </button>
-
-        {/* Large thumbnail */}
-        <div style={styles.modalThumbnailContainer}>
-          {item.thumbnail_url ? (
-            <img
-              src={item.thumbnail_url}
-              alt={item.title}
-              style={styles.modalThumbnail}
-              loading="lazy"
-            />
-          ) : (
-            <div style={styles.modalThumbnailPlaceholder}>
-              <FileIcon />
-            </div>
-          )}
-          {isDownloading && (
-            <div style={styles.modalDownloadingOverlay}>
-              <ProgressCircle progress={downloadProgress} />
-              <p style={styles.downloadingText}>Downloading for offline use...</p>
-            </div>
-          )}
-        </div>
-
-        {/* Title */}
-        <h2 style={styles.modalTitle}>{item.title}</h2>
-
-        {/* Timestamp */}
-        <p style={styles.modalTimestamp}>
-          Added {new Date(item.created_at).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-          })}
-        </p>
-
-        {/* Downloaded indicator */}
-        {isDownloaded && !isDownloading && (
-          <div style={styles.offlineReadyBadge}>
-            <OfflineIcon />
-            <span>Available Offline</span>
-          </div>
-        )}
-
-        {/* Description */}
-        {item.description && (
-          <p style={styles.modalDescription}>{item.description}</p>
-        )}
-
-        {/* Action Buttons - Order: Document, Link, Quiz */}
-        <div style={styles.actionButtons}>
-          {/* View File / Document */}
-          {item.file_url && (
-            <button
-              onClick={() => {
-                if (onAssetEvent) onAssetEvent('file_click');
-                openInAppBrowser(item.file_url);
-              }}
-              style={styles.actionBtn}
-            >
-              <FileIcon />
-              <span>{item.file_name || 'View File'}</span>
-            </button>
-          )}
-
-          {/* External Link */}
-          {item.external_link && (
-            <button
-              onClick={() => {
-                if (onAssetEvent) onAssetEvent('link_click');
-                openInAppBrowser(item.external_link);
-              }}
-              style={styles.actionBtn}
-            >
-              <LinkIcon />
-              <span>{item.external_link_label || 'View Link'}</span>
-            </button>
-          )}
-
-          {/* Quiz Link */}
-          {item.quiz_link && (
-            <button
-              onClick={() => {
-                if (onAssetEvent) onAssetEvent('quiz_click');
-                openInAppBrowser(item.quiz_link);
-              }}
-              style={styles.actionBtn}
-            >
-              <QuizIcon />
-              <span>{item.quiz_link_label || 'Take Quiz'}</span>
-            </button>
-          )}
-        </div>
-
-        {/* Download Button */}
-        {item.is_downloadable && item.file_url && (
-          <button
-            style={{
-              ...styles.downloadBtn,
-              ...(isDownloaded && !isDownloading ? styles.downloadBtnDownloaded : {}),
-              ...(isDownloading ? styles.downloadBtnDownloading : {}),
-            }}
-            onClick={onDownload}
-            disabled={isDownloading}
-          >
-            {isDownloading ? (
-              <>
-                <ProgressCircle progress={downloadProgress} />
-                <span>Downloading... {downloadProgress !== -1 ? `${downloadProgress}%` : ''}</span>
-              </>
-            ) : isDownloaded ? (
-              <>
-                <CheckIcon />
-                <span>Downloaded - Available Offline</span>
-              </>
-            ) : (
-              <>
-                <DownloadIcon filled={false} />
-                <span>Download for Offline Use</span>
-              </>
-            )}
+  return ReactDOM.createPortal(
+    <>
+      <div
+        ref={overlayRef}
+        style={styles.modalOverlay}
+        onClick={onClose}
+        onTouchMove={handleTouchMove}
+      >
+        <div ref={modalRef} style={styles.modal} onClick={e => e.stopPropagation()}>
+          {/* Close button */}
+          <button style={styles.closeBtn} onClick={onClose}>
+            <CloseIcon />
           </button>
-        )}
+
+          {/* Large thumbnail */}
+          <div style={styles.modalThumbnailContainer}>
+            {item.thumbnail_url ? (
+              <img
+                src={item.thumbnail_url}
+                alt={item.title}
+                style={styles.modalThumbnail}
+                loading="lazy"
+              />
+            ) : (
+              <div style={styles.modalThumbnailPlaceholder}>
+                <FileIcon />
+              </div>
+            )}
+            {isDownloading && (
+              <div style={styles.modalDownloadingOverlay}>
+                <ProgressCircle progress={downloadProgress} />
+                <p style={styles.downloadingText}>Downloading for offline use...</p>
+              </div>
+            )}
+          </div>
+
+          {/* Title */}
+          <h2 style={styles.modalTitle}>{item.title}</h2>
+
+          {/* Timestamp */}
+          <p style={styles.modalTimestamp}>
+            Added {new Date(item.created_at).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            })}
+          </p>
+
+          {/* Downloaded indicator */}
+          {isDownloaded && !isDownloading && (
+            <div style={styles.offlineReadyBadge}>
+              <OfflineIcon />
+              <span>Available Offline</span>
+            </div>
+          )}
+
+          {/* Description */}
+          {item.description && (
+            <p style={styles.modalDescription}>{item.description}</p>
+          )}
+
+          {/* Action Buttons - Order: Document, Link, Quiz, Video */}
+          <div style={styles.actionButtons}>
+            {/* View File / Document */}
+            {item.file_url && (
+              <button
+                onClick={() => {
+                  onAssetEvent && onAssetEvent('file_click');
+                  openInAppBrowser(item.file_url);
+                }}
+                style={styles.actionBtn}
+              >
+                <FileIcon />
+                <span>{item.file_name || 'View File'}</span>
+              </button>
+            )}
+
+            {/* External Link */}
+            {item.external_link && (
+              <button
+                onClick={() => {
+                  onAssetEvent && onAssetEvent('link_click');
+                  openInAppBrowser(item.external_link);
+                }}
+                style={styles.actionBtn}
+              >
+                <LinkIcon />
+                <span>{item.external_link_label || 'View Link'}</span>
+              </button>
+            )}
+
+            {/* Quiz Link */}
+            {item.quiz_link && (
+              <button
+                onClick={() => {
+                  onAssetEvent && onAssetEvent('quiz_click');
+                  openInAppBrowser(item.quiz_link);
+                }}
+                style={styles.actionBtn}
+              >
+                <QuizIcon />
+                <span>{item.quiz_link_label || 'Take Quiz'}</span>
+              </button>
+            )}
+
+            {/* Private Video */}
+            {isVideoReady && (
+              <button
+                onClick={handlePlayVideo}
+                style={styles.videoActionBtn}
+                disabled={videoLoading}
+              >
+                <PlayIcon />
+                <span>{videoLoading ? 'Loading...' : 'Private Video'}</span>
+              </button>
+            )}
+            {isVideoProcessing && (
+              <button
+                style={styles.videoProcessingBtn}
+                disabled
+              >
+                <LockIcon />
+                <span>Video recently added - processing</span>
+              </button>
+            )}
+          </div>
+
+          {/* Download Button */}
+          {item.is_downloadable && item.file_url && (
+            <button
+              style={{
+                ...styles.downloadBtn,
+                ...(isDownloaded && !isDownloading ? styles.downloadBtnDownloaded : {}),
+                ...(isDownloading ? styles.downloadBtnDownloading : {}),
+              }}
+              onClick={onDownload}
+              disabled={isDownloading}
+            >
+              {isDownloading ? (
+                <>
+                  <ProgressCircle progress={downloadProgress} />
+                  <span>Downloading... {downloadProgress !== -1 ? `${downloadProgress}%` : ''}</span>
+                </>
+              ) : isDownloaded ? (
+                <>
+                  <CheckIcon />
+                  <span>Downloaded - Available Offline</span>
+                </>
+              ) : (
+                <>
+                  <DownloadIcon filled={false} />
+                  <span>Download for Offline Use</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Full-screen Video Player Overlay */}
+      {showVideoPlayer && (
+        <div
+          style={styles.videoPlayerOverlay}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <button
+            style={styles.videoCloseBtn}
+            onClick={() => setShowVideoPlayer(false)}
+          >
+            <CloseIcon />
+          </button>
+          <div style={styles.videoPlayerContainer}>
+            <iframe
+              src={videoEmbedUrl}
+              style={styles.videoIframe}
+              allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
+              allowFullScreen
+              title="Private Video"
+            />
+          </div>
+        </div>
+      )}
+    </>,
+    document.body
   );
 };
 
@@ -419,6 +526,7 @@ const ContentLibraryScreen = ({ type, title, hideHeader }) => {
 
   const handleItemClick = (item) => {
     setSelectedItem(item);
+    // Track that user opened/viewed this asset
     trackAssetEvent(item.id, item.title, item.categoryTitle, item.categoryType, 'view');
   };
 
@@ -513,7 +621,13 @@ const ContentLibraryScreen = ({ type, title, hideHeader }) => {
         downloadProgress={selectedItemProgress}
         onAssetEvent={(eventType) => {
           if (selectedItem) {
-            trackAssetEvent(selectedItem.id, selectedItem.title, selectedItem.categoryTitle, selectedItem.categoryType, eventType);
+            trackAssetEvent(
+              selectedItem.id,
+              selectedItem.title,
+              selectedItem.categoryTitle,
+              selectedItem.categoryType,
+              eventType
+            );
           }
         }}
       />
@@ -524,7 +638,7 @@ const ContentLibraryScreen = ({ type, title, hideHeader }) => {
 const styles = {
   container: {
     minHeight: '100%',
-    backgroundColor: 'var(--background-off-white)',
+    backgroundColor: '#f8fafc',
     display: 'flex',
     flexDirection: 'column',
   },
@@ -544,7 +658,7 @@ const styles = {
     margin: '0 auto',
   },
   headerTitle: {
-    color: 'var(--primary-blue)',
+    color: '#1e40af',
     fontSize: '24px',
     fontWeight: '700',
     margin: 0,
@@ -553,7 +667,7 @@ const styles = {
     maxWidth: '600px',
     margin: '0 auto 16px auto',
     height: '2px',
-    backgroundColor: 'rgba(var(--primary-blue-rgb), 0.15)',
+    backgroundColor: 'rgba(30, 64, 175, 0.15)',
     borderRadius: '1px',
   },
   contentContainer: {
@@ -576,7 +690,7 @@ const styles = {
     gap: '16px',
   },
   loadingText: {
-    color: 'var(--text-muted)',
+    color: '#64748b',
     fontSize: '14px',
   },
 
@@ -590,16 +704,16 @@ const styles = {
     left: '14px',
     top: '50%',
     transform: 'translateY(-50%)',
-    color: 'var(--text-light)',
+    color: '#94a3b8',
   },
   searchInput: {
     width: '100%',
     padding: '12px 16px 12px 44px',
     borderRadius: '12px',
     border: '1px solid #e2e8f0',
-    backgroundColor: 'var(--background-off-white)',
+    backgroundColor: '#f8fafc',
     fontSize: '15px',
-    color: 'var(--text-dark)',
+    color: '#1e293b',
     outline: 'none',
     boxSizing: 'border-box',
   },
@@ -611,10 +725,10 @@ const styles = {
   categoryTitle: {
     fontSize: '16px',
     fontWeight: '600',
-    color: 'var(--text-dark)',
+    color: '#1e293b',
     margin: '0 0 12px 0',
     paddingBottom: '4px',
-    borderBottom: '2px solid var(--primary-blue)',
+    borderBottom: '2px solid #1e40af',
     display: 'inline-block',
   },
   horizontalScroll: {
@@ -626,7 +740,7 @@ const styles = {
     msOverflowStyle: 'none',
   },
   emptyCategory: {
-    color: 'var(--text-light)',
+    color: '#94a3b8',
     fontSize: '14px',
     fontStyle: 'italic',
   },
@@ -643,7 +757,7 @@ const styles = {
     height: '120px',
     borderRadius: '12px',
     overflow: 'hidden',
-    backgroundColor: 'var(--border-light)',
+    backgroundColor: '#e2e8f0',
     marginBottom: '8px',
   },
   thumbnail: {
@@ -657,7 +771,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: 'var(--text-light)',
+    color: '#94a3b8',
   },
   downloadingOverlay: {
     position: 'absolute',
@@ -665,7 +779,7 @@ const styles = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(var(--primary-blue-rgb), 0.85)',
+    backgroundColor: 'rgba(30, 64, 175, 0.85)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -686,7 +800,7 @@ const styles = {
   cardTitle: {
     fontSize: '13px',
     fontWeight: '500',
-    color: 'var(--text-dark)',
+    color: '#1e293b',
     margin: 0,
     display: '-webkit-box',
     WebkitLineClamp: 2,
@@ -716,7 +830,7 @@ const styles = {
     padding: '40px 20px',
   },
   emptyText: {
-    color: 'var(--text-muted)',
+    color: '#64748b',
     fontSize: '15px',
   },
 
@@ -758,13 +872,13 @@ const styles = {
     width: '36px',
     height: '36px',
     borderRadius: '50%',
-    backgroundColor: 'var(--bg-light)',
+    backgroundColor: '#f1f5f9',
     border: 'none',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: 'var(--text-muted)',
+    color: '#64748b',
     zIndex: 10,
   },
   modalThumbnailContainer: {
@@ -773,7 +887,7 @@ const styles = {
     aspectRatio: '1',
     borderRadius: '16px',
     overflow: 'hidden',
-    backgroundColor: 'var(--border-light)',
+    backgroundColor: '#e2e8f0',
     marginBottom: '16px',
   },
   modalThumbnail: {
@@ -787,7 +901,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: 'var(--text-light)',
+    color: '#94a3b8',
   },
   modalDownloadingOverlay: {
     position: 'absolute',
@@ -795,7 +909,7 @@ const styles = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(var(--primary-blue-rgb), 0.9)',
+    backgroundColor: 'rgba(30, 64, 175, 0.9)',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -810,12 +924,12 @@ const styles = {
   modalTitle: {
     fontSize: '20px',
     fontWeight: '600',
-    color: 'var(--text-dark)',
+    color: '#1e293b',
     margin: '0 0 4px 0',
   },
   modalTimestamp: {
     fontSize: '13px',
-    color: 'var(--text-muted)',
+    color: '#64748b',
     margin: '0 0 12px 0',
   },
   offlineReadyBadge: {
@@ -849,9 +963,9 @@ const styles = {
     alignItems: 'center',
     gap: '10px',
     padding: '12px 16px',
-    backgroundColor: 'var(--bg-light)',
+    backgroundColor: '#f1f5f9',
     borderRadius: '10px',
-    color: 'var(--text-dark)',
+    color: '#1e293b',
     fontSize: '14px',
     fontWeight: '500',
     transition: 'background-color 0.2s',
@@ -869,7 +983,7 @@ const styles = {
     gap: '10px',
     width: '100%',
     padding: '14px 16px',
-    backgroundColor: 'var(--primary-blue)',
+    backgroundColor: '#1e40af',
     borderRadius: '12px',
     border: 'none',
     cursor: 'pointer',
@@ -882,8 +996,102 @@ const styles = {
     backgroundColor: '#10b981',
   },
   downloadBtnDownloading: {
-    backgroundColor: 'var(--primary-blue)',
+    backgroundColor: '#1e40af',
     cursor: 'not-allowed',
+  },
+
+  // Video badge on thumbnails
+  videoBadge: {
+    position: 'absolute',
+    bottom: '6px',
+    left: '6px',
+    width: '22px',
+    height: '22px',
+    borderRadius: '50%',
+    backgroundColor: 'rgba(30, 64, 175, 0.9)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#ffffff',
+  },
+
+  // Video action buttons
+  videoActionBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '12px 16px',
+    backgroundColor: '#1e40af',
+    borderRadius: '10px',
+    color: '#ffffff',
+    fontSize: '14px',
+    fontWeight: '500',
+    border: 'none',
+    cursor: 'pointer',
+    width: '100%',
+    textAlign: 'left',
+  },
+  videoProcessingBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '12px 16px',
+    backgroundColor: '#f1f5f9',
+    borderRadius: '10px',
+    color: '#94a3b8',
+    fontSize: '14px',
+    fontWeight: '500',
+    border: 'none',
+    cursor: 'not-allowed',
+    width: '100%',
+    textAlign: 'left',
+  },
+
+  // Video player overlay
+  videoPlayerOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#000000',
+    zIndex: 3000,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoCloseBtn: {
+    position: 'absolute',
+    top: 'calc(16px + env(safe-area-inset-top, 0px))',
+    right: '16px',
+    width: '40px',
+    height: '40px',
+    borderRadius: '50%',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    border: 'none',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#ffffff',
+    zIndex: 10,
+  },
+  videoPlayerContainer: {
+    width: '100%',
+    height: '100%',
+    maxWidth: '1200px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '60px 16px 16px 16px',
+    boxSizing: 'border-box',
+  },
+  videoIframe: {
+    width: '100%',
+    aspectRatio: '16 / 9',
+    maxHeight: '100%',
+    border: 'none',
+    borderRadius: '8px',
   },
 
   // Spinner
@@ -898,7 +1106,7 @@ const styles = {
     width: '28px',
     height: '28px',
     border: '3px solid #e2e8f0',
-    borderTopColor: 'var(--primary-blue)',
+    borderTopColor: '#1e40af',
     borderRadius: '50%',
     animation: 'spin 0.8s linear infinite',
   },
