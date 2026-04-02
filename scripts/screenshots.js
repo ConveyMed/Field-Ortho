@@ -23,9 +23,9 @@ const fs = require('fs');
 
 // --- Config (override with env vars) ---
 const BASE_URL = `http://localhost:${process.env.PORT || 3001}`;
-const ORG_CODE = process.env.ORG_CODE || 'REPLACE_ORG_CODE';
-const EMAIL = process.env.TEST_EMAIL || 'REPLACE_TEST_EMAIL';
-const PASSWORD = process.env.TEST_PASSWORD || 'REPLACE_TEST_PASSWORD';
+const ORG_CODE = process.env.ORG_CODE || '00000';
+const EMAIL = process.env.TEST_EMAIL || 'TheK2way17@gmail.com';
+const PASSWORD = process.env.TEST_PASSWORD || 'Pri123456!';
 const OUTPUT_DIR = path.join(__dirname, '..', 'screenshots');
 
 // App Store required device sizes
@@ -217,50 +217,24 @@ async function runForDevice(device) {
     }
 
     // ---- 04: AI Chat ----
-    if (await clickNavButton(page, 'AI Agent')) {
-      await sleep(2000);
-
-      // Find and click a product suggestion chip
-      const navLabels = ['Sign In', 'Send', 'More', 'Home', 'Sales Tools', 'Downloads',
-        'AI Agent', 'Profile', 'Chat', 'Directory', 'Show', 'Hide', 'Forms',
-        'Training', 'Resource Library', 'Scheduled', 'Feed', 'Clear All',
-        'Download for Offline Use', 'Downloaded', 'All', 'Library'];
-      const allButtons = await page.locator('button').all();
-      for (const btn of allButtons) {
-        const text = (await btn.textContent().catch(() => '')).trim();
-        const visible = await btn.isVisible().catch(() => false);
-        if (!visible || !text || text.length > 50 || text.length < 2) continue;
-        if (navLabels.some(n => text.includes(n))) continue;
-        const box = await btn.boundingBox().catch(() => null);
-        if (box && box.y > device.viewport.height * 0.35) {
-          console.log(`    Selecting product: "${text}"`);
-          await btn.click();
-          await sleep(800);
-          break;
-        }
-      }
-
-      // Type a question and send
-      const chatInput = page.locator('textarea').last();
-      if (await chatInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await chatInput.fill('What are the key benefits?');
-        await chatInput.press('Enter');
-        console.log('    Waiting for AI response...');
-        await sleep(10000);
-      }
+    if (await clickNavButton(page, 'Field AI')) {
+      await sleep(3000);
+      // Just screenshot the AI panel as-is (product selection screen)
       await takeScreenshot(page, device, '04-AIChat');
 
-      // Close AI panel - click the backdrop/overlay area behind it
-      const panelOverlay = page.locator('div[style*="position: fixed"]').first();
-      if (await panelOverlay.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await panelOverlay.click({ position: { x: 10, y: 10 }, force: true });
-      }
-      await sleep(1500);
-      // If panel is still open, try Escape
+      // Close AI panel - try multiple approaches
       await page.keyboard.press('Escape');
-      await sleep(1000);
+      await sleep(500);
+      await page.keyboard.press('Escape');
+      await sleep(500);
+      // Click outside any overlay
+      await page.mouse.click(10, 10);
+      await sleep(500);
+      // Navigate to home first to fully reset, then to downloads
+      await navigateTo(page, '/home');
+      await sleep(2000);
     } else {
-      console.log('  (skipped 04-AIChat - AI Agent button not found)');
+      console.log('  (skipped 04-AIChat - Field AI button not found)');
     }
 
     // ---- 05: Downloads ----

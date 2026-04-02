@@ -233,9 +233,9 @@ const ContentModal = ({ item, onClose, isDownloaded, onDownload, downloadProgres
     }
   }, [item]);
 
-  // Poll for video status when processing (check immediately, then every 15s)
+  // Poll for video status when processing or uploading (check immediately, then every 15s)
   React.useEffect(() => {
-    if (!item?.bunny_video_id || videoStatus !== 'processing') return;
+    if (!item?.bunny_video_id || (videoStatus !== 'processing' && videoStatus !== 'uploading')) return;
 
     const checkStatus = async () => {
       try {
