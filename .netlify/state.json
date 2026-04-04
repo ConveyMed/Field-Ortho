@@ -1,3 +1,21 @@
 {
+	"geolocation": {
+		"data": {
+			"city": "Costa Mesa",
+			"country": {
+				"code": "US",
+				"name": "United States"
+			},
+			"subdivision": {
+				"code": "CA",
+				"name": "California"
+			},
+			"timezone": "America/Los_Angeles",
+			"latitude": 33.6748,
+			"longitude": -117.9089,
+			"postalCode": "92626"
+		},
+		"timestamp": 1773942798291
+	},
 	"siteId": "d84299c1-e604-4f1e-a183-322f07a03147"
 }

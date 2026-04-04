@@ -29,24 +29,20 @@ const PASSWORD = process.env.TEST_PASSWORD || 'Pri123456!';
 const OUTPUT_DIR = path.join(__dirname, '..', 'screenshots');
 
 // App Store required device sizes
+// iPhone 6.5" Display: 1242x2688 (iPhone 11 Pro Max / XS Max)
+// iPad 12.9" Display: 2048x2732 (iPad Pro 12.9")
 const DEVICES = [
   {
-    name: 'iPhone-16-Pro-Max',
-    viewport: { width: 440, height: 956 },
+    name: 'iPhone-6.5',
+    viewport: { width: 414, height: 896 },
     deviceScaleFactor: 3,
-    // Output: 1320x2868
+    // Output: 1242x2688
   },
   {
-    name: 'iPhone-16-Pro',
-    viewport: { width: 402, height: 874 },
-    deviceScaleFactor: 3,
-    // Output: 1206x2622
-  },
-  {
-    name: 'iPad-Pro-13',
-    viewport: { width: 1032, height: 1376 },
+    name: 'iPad-12.9',
+    viewport: { width: 1024, height: 1366 },
     deviceScaleFactor: 2,
-    // Output: 2064x2752
+    // Output: 2048x2732
   },
 ];
 
@@ -175,9 +171,9 @@ async function runForDevice(device) {
     // ---- 02: Home/Feed ----
     await takeScreenshot(page, device, '02-Home');
 
-    // ---- 03: Sales Tools (Resources) ----
+    // ---- 03: Tool Box (Resources) ----
     // Use nav button click instead of page.goto to preserve session
-    if (await clickNavButton(page, 'Sales Tools')) {
+    if (await clickNavButton(page, 'Tool Box')) {
       await sleep(4000);
     }
     await takeScreenshot(page, device, '03-SalesTools');
@@ -245,7 +241,7 @@ async function runForDevice(device) {
 
     // ---- 06: Content Viewer ----
     // Navigate back to resources via nav
-    if (await clickNavButton(page, 'Sales Tools')) {
+    if (await clickNavButton(page, 'Tool Box')) {
       await sleep(4000);
     }
     if (await clickContentCard(page)) {

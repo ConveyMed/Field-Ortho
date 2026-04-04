@@ -119,7 +119,15 @@ const BottomNav = () => {
     }
     // 4. Downloads (always on)
     items.push({ id: 'downloads', icon: DownloadsIcon, label: 'Downloads', path: '/downloads' });
-    // 5. Profile (always last)
+    // 5. Directory (toggle)
+    if (showDirectory) {
+      items.push({ id: 'directory', icon: DirectoryIcon, label: 'Directory', path: '/directory' });
+    }
+    // 6. Chat (toggle)
+    if (showChat && chatEnabledByAdmin) {
+      items.push({ id: 'chat', icon: ChatIcon, label: 'Chat', path: '/chat', hasBadge: chatUnread > 0 });
+    }
+    // 7. Profile (always last)
     items.push({ id: 'profile', icon: ProfileIcon, label: 'Profile', path: '/profile' });
 
     return items;

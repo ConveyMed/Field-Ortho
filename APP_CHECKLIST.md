@@ -40,9 +40,10 @@
 | GitHub repo (ConveyMed org) | https://github.com/ConveyMed/Field-Ortho | done |
 | Chase added as collaborator | | needs confirm |
 | Netlify site created & linked to repo | | waiting on Mike |
-| Bunny API Key | | waiting on Mike |
-| Bunny Library ID | | waiting on Mike |
-| Bunny Token Auth Key | | waiting on Mike |
+| Bunny API Key | 75e20c73-e9f5-4897-8610fc36e07a-1653-471b | done |
+| Bunny Library ID | 619203 | done |
+| Bunny Token Auth Key | c63490ca-e9a7-462d-ba2f-35f1b0ebff65 | done |
+| Bunny CDN Host | vz-8f0f04c7-755.b-cdn.net | done |
 
 ### Service Keys (Chase creates)
 | Service | Key | Value | Status |
@@ -82,9 +83,9 @@
 - [x] App profile doc from Mike
 
 ### What's Still Needed
-- [ ] Netlify site created & linked to repo (Mike)
-- [ ] Bunny keys (Mike)
-- [ ] OneSignal app (later)
+- [x] Netlify site created (Chase did manual deploy)
+- [x] Bunny keys received
+- [x] OneSignal app created
 
 ---
 
@@ -97,26 +98,27 @@
 - [x] Update legal pages (LegalSupport.js)
 - [x] Update bug report URL (Profile.js)
 - [x] Update Support page (Support.js)
-- [ ] Generate icons from logo
+- [x] Generate icons from logo (iOS AppIcon, Android mipmaps, PWA icons, OG image, login logo)
 - [x] Customize: rename feed to "Field Connect"
 - [x] Customize: rename resource header to "Tool Box"
 - [x] Customize: rename AI agent to "Field AI"
 - [x] Customize: hide Directory, Chat, Updates from nav
 - [x] Customize: nav order Home | Sales Tools | Field AI | Downloads | Profile
 - [x] Customize: all users can post
-- [ ] Init git, commit, push to GitHub
+- [x] Init git, commit, push to GitHub
 
 ### Supabase Setup (Claude does via MCP once Chase provides project keys)
-- [ ] Run schema SQL
-- [ ] Create storage buckets (profile-images, post-images, chat-attachments, content-files)
-- [ ] Set secrets (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ONESIGNAL keys, GEMINI_API_KEY)
-- [ ] Deploy edge functions (ai-chat, send-push-notification, notification-dispatcher, support-contact)
-- [ ] Enable Realtime (posts, notifications, messages, chat_typing, message_reactions)
-- [ ] **Turn off email confirmation**
-- [ ] Create test accounts (via admin API)
-- [ ] Create support_requests table
-- [ ] Set Auth URL config (Site URL, Redirect URLs) -- **Chase does manually**
-- [ ] Update email templates -- **Chase does manually**
+- [x] Run schema SQL (all 15 tables + organization_code)
+- [x] Create storage buckets (profile-images, post-images, chat-attachments, content-files)
+- [x] Set secrets (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ONESIGNAL_APP_ID, ONESIGNAL_REST_API_KEY)
+- [x] Deploy edge functions (ai-chat, send-push-notification, notification-dispatcher, support-contact)
+- [x] Enable Realtime (posts, notifications, messages, chat_typing, message_reactions)
+- [x] **Turn off email confirmation**
+- [x] Create test accounts (Chase + Apple Review)
+- [x] Create support_requests table
+- [x] Create organization_code table (code: 00000)
+- [x] Set Auth URL config (Site URL, Redirect URLs)
+- [x] Update email templates (not needed, email confirmation off)
 
 ### Test Accounts
 | Account | Email | Password | Purpose |
@@ -126,15 +128,15 @@
 | Client test | | | For client beta testing |
 
 ### Netlify Setup
-- [ ] Mike creates site & links to GitHub repo -- **Mike does this**
-- [ ] Set environment variables -- **Claude does via CLI (once site exists)**
-- [ ] Trigger deploy
-- [ ] Verify site loads
+- [x] Site created (manual deploy by Chase)
+- [x] Set environment variables (6 env vars via CLI)
+- [x] Deployed to https://fieldortho.netlify.app
+- [x] Verified site loads
 
-### OneSignal Setup (later)
-- [ ] Create OneSignal app
-- [ ] Upload .p8 APNs key (Key ID: 46WR2KRB9F, Team ID: 9B895DPQKP)
-- [ ] Set bundle ID: com.fieldortho.app
+### OneSignal Setup
+- [x] Create OneSignal app (App ID: 7a40ef60-32f6-4b18-b8e4-abfe88467f44)
+- [ ] Upload .p8 APNs key (Key ID: 46WR2KRB9F, Team ID: 9B895DPQKP) -- **Chase does in OneSignal dashboard**
+- [ ] Set bundle ID: com.fieldortho.app -- **Chase does in OneSignal dashboard**
 
 ### Build Outputs
 | Output | Location |
@@ -166,19 +168,21 @@
 - [ ] Submit to TestFlight
 
 ### Android - Gradle
-- [ ] `npx cap add android && npx cap sync`
-- [ ] Generate upload keystore
-- [ ] Configure signing in build.gradle
-- [ ] Add *.jks to .gitignore
-- [ ] Fix Gradle/AGP versions if needed
-- [ ] `cd android && ./gradlew bundleRelease`
+- [x] Fix MainActivity.java package path
+- [x] Generate upload keystore (fieldortho-upload-key.jks, password: fieldortho2026)
+- [x] Configure signing in build.gradle
+- [x] Add *.jks to .gitignore
+- [x] Fix Gradle/AGP versions (AGP 8.9.1, Gradle 8.11.1, SDK 36)
+- [x] Fix Kotlin stdlib conflicts
+- [x] `cd android && ./gradlew bundleRelease`
 - [ ] Upload AAB to Google Play Console internal testing
 
 ### Publish Outputs
 | Output | Location |
 |--------|----------|
 | Keystore | `android/fieldortho-upload-key.jks` |
-| Keystore Password | |
+| Keystore Alias | `upload` |
+| Keystore Password | `fieldortho2026` |
 | AAB File | `android/app/build/outputs/bundle/release/app-release.aab` |
 | TestFlight Build | |
 | Google Play Internal | |
