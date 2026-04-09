@@ -270,21 +270,21 @@ const Profile = () => {
                 <button style={styles.menuItem} onClick={() => navigate('/manage-library')}>
                   <div style={styles.menuItemWithIcon}>
                     <LibraryIcon />
-                    <span style={styles.menuText}>Manage Library</span>
+                    <span style={styles.menuText}>Manage Brochures</span>
                   </div>
                   <ChevronRightIcon />
                 </button>
                 <button style={styles.menuItem} onClick={() => navigate('/manage-training')}>
                   <div style={styles.menuItemWithIcon}>
                     <TrainingIcon />
-                    <span style={styles.menuText}>Manage Training</span>
+                    <span style={styles.menuText}>Manage Surgical Techniques</span>
                   </div>
                   <ChevronRightIcon />
                 </button>
                 <button style={styles.menuItem} onClick={() => navigate('/manage-forms')}>
                   <div style={styles.menuItemWithIcon}>
                     <DocumentIcon />
-                    <span style={styles.menuText}>Manage Forms</span>
+                    <span style={styles.menuText}>Manage Training</span>
                   </div>
                   <ChevronRightIcon />
                 </button>

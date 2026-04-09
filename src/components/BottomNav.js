@@ -111,8 +111,8 @@ const BottomNav = () => {
 
     // 1. Home (always on)
     items.push({ id: 'home', icon: HomeIcon, label: 'Home', path: '/home' });
-    // 2. Tool Box (always on)
-    items.push({ id: 'resources', icon: SalesToolsIcon, label: 'Tool Box', path: '/resources' });
+    // 2. Sales Tools (always on)
+    items.push({ id: 'resources', icon: SalesToolsIcon, label: 'Sales Tools', path: '/resources' });
     // 3. Field AI (toggle)
     if (showAIShortcut) {
       items.push({ id: 'ai', icon: AIIcon, label: 'Field AI', path: '/ai-agent' });

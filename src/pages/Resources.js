@@ -2,9 +2,9 @@ import { useState } from 'react';
 import ContentLibraryScreen from '../components/ContentLibraryScreen';
 
 const TABS = [
-  { id: 'library', label: 'Sales Tools' },
-  { id: 'training', label: 'Training' },
-  { id: 'forms', label: 'Forms' },
+  { id: 'library', label: 'Brochures' },
+  { id: 'training', label: 'Surgical Techniques' },
+  { id: 'forms', label: 'Training' },
 ];
 
 const Resources = () => {
@@ -15,7 +15,7 @@ const Resources = () => {
       {/* Header */}
       <header style={styles.header}>
         <div style={styles.headerInner}>
-          <h1 style={styles.headerTitle}>Tool Box</h1>
+          <h1 style={styles.headerTitle}>Sales Tools</h1>
         </div>
         {/* Tab Bar */}
         <div style={styles.tabBar}>
