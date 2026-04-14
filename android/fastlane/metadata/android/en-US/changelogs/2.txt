@@ -1,0 +1,1 @@
+Fixed app icon and splash screen to match store listing branding.
