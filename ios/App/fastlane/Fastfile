@@ -84,8 +84,10 @@ platform :ios do
       submit_for_review:  true,
       automatic_release:  true,
       force:              true,
+      reject_if_possible: true,
       skip_screenshots:   true,
-      skip_metadata:      true,
+      skip_metadata:      false,
+      skip_binary_upload: true,
       skip_app_version_update: false,
       precheck_include_in_app_purchases: false,
       submission_information: {
