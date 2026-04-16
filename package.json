@@ -1,6 +1,6 @@
 {
   "name": "field-ortho-connect",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Field Orthopaedics Connect - Surgical techniques, sales collateral, IFUs, and real-time updates",
   "private": true,
   "dependencies": {

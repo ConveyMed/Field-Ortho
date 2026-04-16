@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { supabase } from '../config/supabase';
+import { logNotificationClick } from '../services/analytics';
 
 const ActivityNotificationsContext = createContext({});
 
@@ -418,6 +419,11 @@ export const ActivityNotificationsProvider = ({ children }) => {
   const navigateToNotification = useCallback((notification) => {
     // Mark this notification as read (but DON'T move the "new" marker)
     markAsRead(notification.id);
+
+    // Track notification click for analytics
+    if (user?.id) {
+      logNotificationClick(user.id, notification.id, notification.type);
+    }
 
     // Close panel
     closePanel();
