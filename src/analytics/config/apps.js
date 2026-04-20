@@ -1,11 +1,11 @@
-// Single app - uses demo's Supabase directly
+// Single app - uses FieldOrtho's own Supabase
 export const APPS = {
-  demo: {
-    id: 'demo',
-    name: 'Demo',
-    supabaseUrl: 'https://lbazotqhqiozgdpforfl.supabase.co',
-    supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxiYXpvdHFocWlvemdkcGZvcmZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0OTM0NTMsImV4cCI6MjA4MTA2OTQ1M30.nMLQ19z3NhhEGQCSMPm_P4A9P6wY64ZeFPCkGGMtuY4',
+  fieldortho: {
+    id: 'fieldortho',
+    name: 'FieldOrtho',
+    supabaseUrl: 'https://whwpkcdpahhaxexxmbwq.supabase.co',
+    supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indod3BrY2RwYWhoYXhleHhtYndxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MTg5NzMsImV4cCI6MjA4OTI5NDk3M30.0iEtHH8ONbKESACh4lqEyymowl8xIO1jhtQqSgKmaw0',
   },
 }
 
-export const DEFAULT_APP = 'demo'
+export const DEFAULT_APP = 'fieldortho'
