@@ -1,14 +1,14 @@
 import { useEffect } from 'react'
-import { HiOutlineClipboardList, HiOutlineCursorClick } from 'react-icons/hi'
+import { HiOutlineAcademicCap, HiOutlineCursorClick } from 'react-icons/hi'
 import TimeframeSelector from '../../components/TimeframeSelector'
 import StatCardGrid from '../../components/charts/StatCardGrid'
 import DataTable from '../../components/charts/DataTable'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import useTrainingAssets from '../../hooks/useTrainingAssets'
+import useSurgicalTechniquesAssets from '../../hooks/useSurgicalTechniquesAssets'
 import { formatNumber } from '../../components/export/exportUtils'
 
-export default function TrainingAssets() {
-  const { data, loading, error, fetchData } = useTrainingAssets()
+export default function SurgicalTechniquesAssets() {
+  const { data, loading, error, fetchData } = useSurgicalTechniquesAssets()
 
   useEffect(() => {
     fetchData()
@@ -24,20 +24,20 @@ export default function TrainingAssets() {
     {
       title: 'Unique Users',
       value: formatNumber(data.totalUniqueUsers),
-      icon: HiOutlineClipboardList,
+      icon: HiOutlineAcademicCap,
       subtitle: 'Users who interacted'
     },
     {
-      title: 'Training Accessed',
+      title: 'Techniques Accessed',
       value: formatNumber(data.assets.length),
-      subtitle: 'Different training items'
+      subtitle: 'Different surgical technique items'
     }
   ] : []
 
   const columns = [
     {
       key: 'assetName',
-      label: 'Training Name',
+      label: 'Surgical Technique Name',
       render: (val, row) => (
         <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {val}
@@ -63,8 +63,8 @@ export default function TrainingAssets() {
     <div style={styles.container}>
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>Training Assets</h1>
-          <p style={styles.subtitle}>Engagement with training content</p>
+          <h1 style={styles.title}>Surgical Techniques Assets</h1>
+          <p style={styles.subtitle}>Engagement with surgical technique content</p>
         </div>
         <TimeframeSelector onApply={fetchData} />
       </div>
@@ -81,14 +81,14 @@ export default function TrainingAssets() {
 
           {data.assets.length > 0 ? (
             <DataTable
-              title="Training Asset Engagement"
+              title="Surgical Technique Asset Engagement"
               columns={columns}
               data={data.assets}
               defaultSortColumn="interactions"
             />
           ) : (
             <div style={styles.empty}>
-              No training interactions found in this timeframe.
+              No surgical technique interactions found in this timeframe.
             </div>
           )}
         </>

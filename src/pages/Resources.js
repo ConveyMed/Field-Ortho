@@ -2,13 +2,13 @@ import { useState } from 'react';
 import ContentLibraryScreen from '../components/ContentLibraryScreen';
 
 const TABS = [
-  { id: 'library', label: 'Brochures' },
-  { id: 'training', label: 'Surgical Techniques' },
-  { id: 'forms', label: 'Training' },
+  { id: 'brochures', label: 'Brochures' },
+  { id: 'surgical_techniques', label: 'Surgical Techniques' },
+  { id: 'training', label: 'Training' },
 ];
 
 const Resources = () => {
-  const [activeTab, setActiveTab] = useState('library');
+  const [activeTab, setActiveTab] = useState('brochures');
 
   return (
     <div style={styles.container}>

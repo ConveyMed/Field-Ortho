@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useAppContext } from '../context/AppContext'
 
-export default function useTrainingAssets() {
+export default function useSurgicalTechniquesAssets() {
   const { supabase, dateRange, orgUserIds } = useAppContext()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -17,7 +17,7 @@ export default function useTrainingAssets() {
       let query = supabase
         .from('asset_events')
         .select('asset_id, asset_name, user_id, event_type, created_at')
-        .eq('category_type', 'training')
+        .eq('category_type', 'surgical_techniques')
 
       if (orgUserIds) {
         query = query.in('user_id', orgUserIds)
@@ -34,6 +34,7 @@ export default function useTrainingAssets() {
 
       if (eventsError) throw eventsError
 
+      // Aggregate by asset
       const assetStats = {}
       events.forEach(event => {
         const key = event.asset_id || event.asset_name
@@ -49,6 +50,7 @@ export default function useTrainingAssets() {
         assetStats[key].uniqueUsers.add(event.user_id)
       })
 
+      // Convert to array
       const assetData = Object.values(assetStats)
         .map(a => ({
           assetId: a.assetId,
@@ -58,6 +60,7 @@ export default function useTrainingAssets() {
         }))
         .sort((a, b) => b.interactions - a.interactions)
 
+      // Check which assets still exist in content_items
       const assetIds = assetData.map(a => a.assetId).filter(Boolean)
       let existingIds = new Set()
       if (assetIds.length > 0) {

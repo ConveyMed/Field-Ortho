@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useAppContext } from '../context/AppContext'
 
-export default function useLibraryAssets() {
+export default function useBrochuresAssets() {
   const { supabase, dateRange, orgUserIds } = useAppContext()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -17,7 +17,7 @@ export default function useLibraryAssets() {
       let query = supabase
         .from('asset_events')
         .select('asset_id, asset_name, user_id, event_type, created_at')
-        .eq('category_type', 'library')
+        .eq('category_type', 'brochures')
 
       if (orgUserIds) {
         query = query.in('user_id', orgUserIds)

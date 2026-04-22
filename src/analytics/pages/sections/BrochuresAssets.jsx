@@ -4,11 +4,11 @@ import TimeframeSelector from '../../components/TimeframeSelector'
 import StatCardGrid from '../../components/charts/StatCardGrid'
 import DataTable from '../../components/charts/DataTable'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import useLibraryAssets from '../../hooks/useLibraryAssets'
+import useBrochuresAssets from '../../hooks/useBrochuresAssets'
 import { formatNumber } from '../../components/export/exportUtils'
 
-export default function LibraryAssets() {
-  const { data, loading, error, fetchData } = useLibraryAssets()
+export default function BrochuresAssets() {
+  const { data, loading, error, fetchData } = useBrochuresAssets()
 
   useEffect(() => {
     fetchData()
@@ -63,7 +63,7 @@ export default function LibraryAssets() {
     <div style={styles.container}>
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>Library Assets</h1>
+          <h1 style={styles.title}>Brochures Assets</h1>
           <p style={styles.subtitle}>Engagement with library content</p>
         </div>
         <TimeframeSelector onApply={fetchData} />

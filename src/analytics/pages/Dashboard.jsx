@@ -9,7 +9,8 @@ import ExportModal from '../components/export/ExportModal'
 import useUserActivity from '../hooks/useUserActivity'
 import useScreenEngagement from '../hooks/useScreenEngagement'
 import useFeedActivity from '../hooks/useFeedActivity'
-import useLibraryAssets from '../hooks/useLibraryAssets'
+import useBrochuresAssets from '../hooks/useBrochuresAssets'
+import useSurgicalTechniquesAssets from '../hooks/useSurgicalTechniquesAssets'
 import useTrainingAssets from '../hooks/useTrainingAssets'
 import useDownloads from '../hooks/useDownloads'
 import useAIUsage from '../hooks/useAIUsage'
@@ -30,7 +31,8 @@ export default function Dashboard() {
   const userActivity = useUserActivity()
   const screenEngagement = useScreenEngagement()
   const feedActivity = useFeedActivity()
-  const libraryAssets = useLibraryAssets()
+  const brochuresAssets = useBrochuresAssets()
+  const surgicalTechniquesAssets = useSurgicalTechniquesAssets()
   const trainingAssets = useTrainingAssets()
   const downloads = useDownloads()
   const aiUsage = useAIUsage()
@@ -45,7 +47,8 @@ export default function Dashboard() {
     userActivity.fetchData()
     screenEngagement.fetchData()
     feedActivity.fetchData()
-    libraryAssets.fetchData()
+    brochuresAssets.fetchData()
+    surgicalTechniquesAssets.fetchData()
     trainingAssets.fetchData()
     downloads.fetchData()
     aiUsage.fetchData()
@@ -55,7 +58,7 @@ export default function Dashboard() {
     growthRetention.fetchData()
   }, [
     userActivity.fetchData, screenEngagement.fetchData, feedActivity.fetchData,
-    libraryAssets.fetchData, trainingAssets.fetchData, downloads.fetchData,
+    brochuresAssets.fetchData, surgicalTechniquesAssets.fetchData, trainingAssets.fetchData, downloads.fetchData,
     aiUsage.fetchData, chatActivity.fetchData, directoryUsage.fetchData,
     notifications.fetchData, growthRetention.fetchData
   ])
@@ -138,13 +141,13 @@ export default function Dashboard() {
         })
       }
 
-      if (sections.includes('libraryAssets') && libraryAssets.data) {
+      if (sections.includes('brochuresAssets') && brochuresAssets.data) {
         exportSections.push({
-          id: 'libraryAssets',
-          title: 'Library Assets',
+          id: 'brochuresAssets',
+          title: 'Brochures Assets',
           stats: [
-            { title: 'Total Interactions', value: formatNumber(libraryAssets.data.totalInteractions) },
-            { title: 'Unique Users', value: formatNumber(libraryAssets.data.uniqueUsers) }
+            { title: 'Total Interactions', value: formatNumber(brochuresAssets.data.totalInteractions) },
+            { title: 'Unique Users', value: formatNumber(brochuresAssets.data.uniqueUsers) }
           ],
           columns: [
             { key: 'assetName', label: 'Asset' },
@@ -152,7 +155,25 @@ export default function Dashboard() {
             { key: 'interactions', label: 'Interactions' },
             { key: 'uniqueUsers', label: 'Unique Users' }
           ],
-          tableData: libraryAssets.data.topAssets
+          tableData: brochuresAssets.data.topAssets
+        })
+      }
+
+      if (sections.includes('surgicalTechniquesAssets') && surgicalTechniquesAssets.data) {
+        exportSections.push({
+          id: 'surgicalTechniquesAssets',
+          title: 'Surgical Techniques Assets',
+          stats: [
+            { title: 'Total Interactions', value: formatNumber(surgicalTechniquesAssets.data.totalInteractions) },
+            { title: 'Unique Users', value: formatNumber(surgicalTechniquesAssets.data.uniqueUsers) }
+          ],
+          columns: [
+            { key: 'assetName', label: 'Asset' },
+            { key: 'category', label: 'Category' },
+            { key: 'interactions', label: 'Interactions' },
+            { key: 'uniqueUsers', label: 'Unique Users' }
+          ],
+          tableData: surgicalTechniquesAssets.data.topAssets
         })
       }
 

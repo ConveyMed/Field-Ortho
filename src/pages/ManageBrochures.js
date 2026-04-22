@@ -1,13 +1,13 @@
 import ManageContentScreen from '../components/ManageContentScreen';
 
-const ManageForms = () => {
+const ManageBrochures = () => {
   return (
     <ManageContentScreen
-      type="forms"
-      title="Manage Forms"
+      type="brochures"
+      title="Manage Brochures"
       backPath="/profile"
     />
   );
 };
 
-export default ManageForms;
+export default ManageBrochures;

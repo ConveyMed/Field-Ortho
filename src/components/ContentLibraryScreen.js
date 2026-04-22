@@ -481,9 +481,9 @@ const ContentModal = ({ item, onClose, isDownloaded, onDownload, downloadProgres
 // Main Component
 const ContentLibraryScreen = ({ type, title, hideHeader }) => {
   const {
-    libraryCategories,
+    brochuresCategories,
+    surgicalTechniquesCategories,
     trainingCategories,
-    formsCategories,
     loading: contentLoading,
     refreshContent,
   } = useContent();
@@ -505,7 +505,7 @@ const ContentLibraryScreen = ({ type, title, hideHeader }) => {
   }, [refreshContent]);
 
   // Get categories based on type
-  const categories = type === 'library' ? libraryCategories : type === 'forms' ? formsCategories : trainingCategories;
+  const categories = type === 'brochures' ? brochuresCategories : type === 'training' ? trainingCategories : surgicalTechniquesCategories;
 
   // Add type to each category for reference
   const categoriesWithType = categories.map(c => ({ ...c, type }));

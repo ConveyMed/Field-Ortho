@@ -647,7 +647,7 @@ const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type, categori
 };
 
 // Multi-Category Content Modal
-const MultiCategoryContentModal = ({ isOpen, onClose, onSave, libraryCategories, trainingCategories, type }) => {
+const MultiCategoryContentModal = ({ isOpen, onClose, onSave, brochuresCategories, surgicalTechniquesCategories, trainingCategories, type }) => {
   const modalRef = React.useRef(null);
   const scrollYRef = React.useRef(0);
   const { prepareVideoUpload } = useContent();
@@ -828,10 +828,27 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, libraryCategories,
           <label style={styles.label}>Select Categories *</label>
           <p style={styles.categoryHint}>Choose one or more categories for this content</p>
 
-          {libraryCategories.length > 0 && (
+          {brochuresCategories.length > 0 && (
             <div style={styles.categorySection}>
-              <div style={styles.categorySectionTitle}>Resource Library</div>
-              {libraryCategories.map(cat => (
+              <div style={styles.categorySectionTitle}>Brochures</div>
+              {brochuresCategories.map(cat => (
+                <label key={cat.id} style={styles.checkboxRow}>
+                  <input
+                    type="checkbox"
+                    checked={selectedCategories.includes(cat.id)}
+                    onChange={() => toggleCategory(cat.id)}
+                    style={styles.checkbox}
+                  />
+                  <span style={styles.checkboxLabel}>{cat.title}</span>
+                </label>
+              ))}
+            </div>
+          )}
+
+          {surgicalTechniquesCategories.length > 0 && (
+            <div style={styles.categorySection}>
+              <div style={styles.categorySectionTitle}>Surgical Techniques</div>
+              {surgicalTechniquesCategories.map(cat => (
                 <label key={cat.id} style={styles.checkboxRow}>
                   <input
                     type="checkbox"
@@ -847,7 +864,7 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, libraryCategories,
 
           {trainingCategories.length > 0 && (
             <div style={styles.categorySection}>
-              <div style={styles.categorySectionTitle}>Training & Development</div>
+              <div style={styles.categorySectionTitle}>Training</div>
               {trainingCategories.map(cat => (
                 <label key={cat.id} style={styles.checkboxRow}>
                   <input
@@ -980,7 +997,7 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, libraryCategories,
 const ManageContentScreen = ({ type, title, backPath }) => {
   const navigate = useNavigate();
   const {
-    libraryCategories, trainingCategories,
+    brochuresCategories, surgicalTechniquesCategories, trainingCategories,
     addCategory, updateCategory, deleteCategory,
     addContentItem, addContentToCategories, updateContentItem, updateContentCategories, deleteContentItem,
     removeContentFromCategory,
@@ -988,7 +1005,11 @@ const ManageContentScreen = ({ type, title, backPath }) => {
     startBackgroundUpload, videoUploads,
   } = useContent();
 
-  const categories = type === 'library' ? libraryCategories : trainingCategories;
+  const categories = type === 'brochures'
+    ? brochuresCategories
+    : type === 'surgical_techniques'
+      ? surgicalTechniquesCategories
+      : trainingCategories;
 
   const [categoryModal, setCategoryModal] = useState({ open: false, category: null });
   const [contentModal, setContentModal] = useState({ open: false, item: null, categoryId: null });
@@ -1112,7 +1133,7 @@ const ManageContentScreen = ({ type, title, backPath }) => {
                       onEditContent={(item) => setContentModal({ open: true, item, categoryId: category.id })}
                       onDeleteContent={(item) => {
                         // Count how many categories this item is in
-                        const allCats = [...libraryCategories, ...trainingCategories];
+                        const allCats = [...brochuresCategories, ...surgicalTechniquesCategories, ...trainingCategories];
                         const categoryCount = allCats.filter(c => c.items.some(i => i.id === item.id)).length;
                         setDeleteConfirm({ open: true, type: 'content', id: item.id, name: item.title, categoryId: category.id, isMultiCategory: categoryCount > 1 });
                       }}
@@ -1168,7 +1189,8 @@ const ManageContentScreen = ({ type, title, backPath }) => {
         isOpen={multiCategoryModal}
         onClose={() => setMultiCategoryModal(false)}
         onSave={handleSaveMultiCategoryContent}
-        libraryCategories={libraryCategories}
+        brochuresCategories={brochuresCategories}
+        surgicalTechniquesCategories={surgicalTechniquesCategories}
         trainingCategories={trainingCategories}
         type={type}
       />

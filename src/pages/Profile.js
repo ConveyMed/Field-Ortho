@@ -267,27 +267,28 @@ const Profile = () => {
                   </div>
                   <ChevronRightIcon />
                 </button>
-                <button style={styles.menuItem} onClick={() => navigate('/manage-library')}>
+                <button style={styles.menuItem} onClick={() => navigate('/manage-brochures')}>
                   <div style={styles.menuItemWithIcon}>
                     <LibraryIcon />
                     <span style={styles.menuText}>Manage Brochures</span>
                   </div>
                   <ChevronRightIcon />
                 </button>
-                <button style={styles.menuItem} onClick={() => navigate('/manage-training')}>
+                <button style={styles.menuItem} onClick={() => navigate('/manage-surgical-techniques')}>
                   <div style={styles.menuItemWithIcon}>
                     <TrainingIcon />
                     <span style={styles.menuText}>Manage Surgical Techniques</span>
                   </div>
                   <ChevronRightIcon />
                 </button>
-                <button style={styles.menuItem} onClick={() => navigate('/manage-forms')}>
+                <button style={styles.menuItem} onClick={() => navigate('/manage-training')}>
                   <div style={styles.menuItemWithIcon}>
                     <DocumentIcon />
                     <span style={styles.menuText}>Manage Training</span>
                   </div>
                   <ChevronRightIcon />
                 </button>
+                {/* Hidden for now — routes remain active
                 <button style={styles.menuItem} onClick={() => navigate('/directory-permissions')}>
                   <div style={styles.menuItemWithIcon}>
                     <ShieldIcon />
@@ -302,6 +303,7 @@ const Profile = () => {
                   </div>
                   <ChevronRightIcon />
                 </button>
+                */}
                 <button style={styles.menuItem} onClick={() => navigate('/manage-analytics')}>
                   <div style={styles.menuItemWithIcon}>
                     <AnalyticsIcon />

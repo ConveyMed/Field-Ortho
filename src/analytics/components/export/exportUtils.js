@@ -610,9 +610,9 @@ function addCoverPage(pdf, title, dateRange, companyName) {
     ['User Activity', 'AI Usage'],
     ['Screen Engagement', 'Chat Activity'],
     ['Feed Activity', 'Directory Usage'],
-    ['Library Assets', 'Notifications'],
-    ['Training Assets', 'Growth & Retention'],
-    ['Downloads', '']
+    ['Brochures Assets', 'Notifications'],
+    ['Surgical Techniques Assets', 'Growth & Retention'],
+    ['Training Assets', 'Downloads']
   ]
 
   let y = 188

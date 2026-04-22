@@ -6,7 +6,8 @@ import Dashboard from './pages/Dashboard'
 import UserActivity from './pages/sections/UserActivity'
 import ScreenEngagement from './pages/sections/ScreenEngagement'
 import FeedActivity from './pages/sections/FeedActivity'
-import LibraryAssets from './pages/sections/LibraryAssets'
+import BrochuresAssets from './pages/sections/BrochuresAssets'
+import SurgicalTechniquesAssets from './pages/sections/SurgicalTechniquesAssets'
 import TrainingAssets from './pages/sections/TrainingAssets'
 import Downloads from './pages/sections/Downloads'
 import AIUsage from './pages/sections/AIUsage'
@@ -26,7 +27,8 @@ export default function AnalyticsApp() {
             <Route path="user-activity" element={<UserActivity />} />
             <Route path="screens" element={<ScreenEngagement />} />
             <Route path="feed" element={<FeedActivity />} />
-            <Route path="library" element={<LibraryAssets />} />
+            <Route path="brochures" element={<BrochuresAssets />} />
+            <Route path="surgical-techniques" element={<SurgicalTechniquesAssets />} />
             <Route path="training" element={<TrainingAssets />} />
             <Route path="downloads" element={<Downloads />} />
             <Route path="ai-usage" element={<AIUsage />} />

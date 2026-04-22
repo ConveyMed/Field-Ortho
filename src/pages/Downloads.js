@@ -111,7 +111,7 @@ const DownloadItem = ({ item, onView, onDelete }) => {
           {formatBytes(item.file_size)} | {formatDate(item.downloadedAt)}
         </p>
         <span style={styles.categoryBadge}>
-          {item.categoryType === 'library' ? 'Library' : 'Training'}
+          {item.categoryType === 'brochures' ? 'Brochures' : item.categoryType === 'surgical_techniques' ? 'Surgical Techniques' : 'Training'}
         </span>
       </div>
       <button style={styles.deleteBtn} onClick={() => onDelete(item.id)}>
@@ -132,7 +132,7 @@ const Downloads = () => {
   } = useDownloads();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [filter, setFilter] = useState('all'); // 'all', 'library', 'training'
+  const [filter, setFilter] = useState('all'); // 'all', 'brochures', 'surgical_techniques', 'training'
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [clearConfirm, setClearConfirm] = useState(false);
 
@@ -220,7 +220,7 @@ const Downloads = () => {
 
           {/* Filter Tabs */}
           <div style={styles.filterTabs}>
-            {['all', 'library', 'training'].map(tab => (
+            {['all', 'brochures', 'surgical_techniques', 'training'].map(tab => (
               <button
                 key={tab}
                 style={{
@@ -229,7 +229,7 @@ const Downloads = () => {
                 }}
                 onClick={() => setFilter(tab)}
               >
-                {tab === 'all' ? 'All' : tab === 'library' ? 'Library' : 'Training'}
+                {tab === 'all' ? 'All' : tab === 'brochures' ? 'Brochures' : tab === 'surgical_techniques' ? 'Surgical Techniques' : 'Training'}
               </button>
             ))}
           </div>

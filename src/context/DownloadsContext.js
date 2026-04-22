@@ -157,7 +157,7 @@ export const DownloadsProvider = ({ children }) => {
         contentId,
         contentItem.title || contentItem.file_name || 'Unknown',
         contentItem.categoryTitle || 'Unknown',
-        contentItem.categoryType || 'library',
+        contentItem.categoryType || 'brochures',
         'download'
       );
 

@@ -32,8 +32,8 @@ import ManageUsers from './pages/ManageUsers';
 import Directory from './pages/Directory';
 import DirectoryPermissions from './pages/DirectoryPermissions';
 import Resources from './pages/Resources';
-import ManageForms from './pages/ManageForms';
-import ManageLibrary from './pages/ManageLibrary';
+import ManageBrochures from './pages/ManageBrochures';
+import ManageSurgicalTechniques from './pages/ManageSurgicalTechniques';
 import ManageTraining from './pages/ManageTraining';
 import ManageAI from './pages/ManageAI';
 import Downloads from './pages/Downloads';
@@ -471,26 +471,26 @@ function AppContent() {
           } />
           <Route path="/library" element={<Navigate to="/resources" replace />} />
           <Route path="/training" element={<Navigate to="/resources" replace />} />
-          <Route path="/manage-forms" element={
-            !isAuthenticated
-              ? <Navigate to="/" replace />
-              : !isProfileComplete
-                ? <Navigate to="/profile-complete" replace />
-                : <AppShell showNav={showBottomNav}><ManageForms /></AppShell>
-          } />
-          <Route path="/manage-library" element={
-            !isAuthenticated
-              ? <Navigate to="/" replace />
-              : !isProfileComplete
-                ? <Navigate to="/profile-complete" replace />
-                : <AppShell showNav={showBottomNav}><ManageLibrary /></AppShell>
-          } />
           <Route path="/manage-training" element={
             !isAuthenticated
               ? <Navigate to="/" replace />
               : !isProfileComplete
                 ? <Navigate to="/profile-complete" replace />
                 : <AppShell showNav={showBottomNav}><ManageTraining /></AppShell>
+          } />
+          <Route path="/manage-brochures" element={
+            !isAuthenticated
+              ? <Navigate to="/" replace />
+              : !isProfileComplete
+                ? <Navigate to="/profile-complete" replace />
+                : <AppShell showNav={showBottomNav}><ManageBrochures /></AppShell>
+          } />
+          <Route path="/manage-surgical-techniques" element={
+            !isAuthenticated
+              ? <Navigate to="/" replace />
+              : !isProfileComplete
+                ? <Navigate to="/profile-complete" replace />
+                : <AppShell showNav={showBottomNav}><ManageSurgicalTechniques /></AppShell>
           } />
           <Route path="/manage-ai" element={
             !isAuthenticated

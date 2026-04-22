@@ -1,18 +1,18 @@
 -- ============================================
--- CONTENT SCHEMA - Library & Training
+-- CONTENT SCHEMA - Brochures, Surgical Techniques, Training
 -- ============================================
 -- Tables:
 --   - content_categories: Categories for organizing content
 --   - content_items: Individual content pieces (files, links, etc.)
 --
--- Both Library and Training use the same structure
--- Differentiated by 'type' field: 'library' or 'training'
+-- All three sections share the same structure.
+-- Differentiated by 'type' field: 'brochures', 'surgical_techniques', or 'training'
 -- ============================================
 
 -- Categories table
 CREATE TABLE IF NOT EXISTS content_categories (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  type VARCHAR(20) NOT NULL CHECK (type IN ('library', 'training')),
+  type VARCHAR(30) NOT NULL CHECK (type IN ('brochures', 'surgical_techniques', 'training')),
   title VARCHAR(255) NOT NULL,
   description TEXT,
   sort_order INTEGER DEFAULT 0,

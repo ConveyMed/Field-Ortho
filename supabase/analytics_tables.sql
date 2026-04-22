@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS asset_events (
   asset_id UUID NOT NULL,
   asset_name VARCHAR(255),
   category VARCHAR(100),
-  category_type VARCHAR(50), -- 'library' or 'training'
+  category_type VARCHAR(50), -- 'brochures' or 'surgical_techniques'
   event_type VARCHAR(50) NOT NULL, -- 'view', 'file_click', 'link_click', 'quiz_click'
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
