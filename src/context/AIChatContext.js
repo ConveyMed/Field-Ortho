@@ -181,13 +181,6 @@ export const AIChatProvider = ({ children }) => {
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
 
-    // Track AI query for analytics
-    const trackQuery = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) logAIQuery(user.id, question.trim(), selectedProduct);
-    };
-    trackQuery();
-
     setIsLoading(true);
     setError(null);
 
@@ -224,6 +217,21 @@ export const AIChatProvider = ({ children }) => {
 
         // Save conversation to history
         saveConversation(newMessages, selectedProduct, currentConversationId);
+
+        // Log analytics with the AI's confidence so we can surface unanswered questions later
+        const trackQuery = async () => {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            logAIQuery(
+              user.id,
+              question.trim(),
+              selectedProduct,
+              data.confidence || null,
+              Boolean(data.sectionTitle || data.pageNumber)
+            );
+          }
+        };
+        trackQuery();
       } else {
         throw new Error(data.error || 'Failed to get response');
       }
