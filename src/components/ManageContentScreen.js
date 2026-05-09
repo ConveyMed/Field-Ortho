@@ -1283,7 +1283,6 @@ const styles = {
   deleteText: { fontSize: '13px', color: '#64748b', lineHeight: '1.5', margin: 0, padding: '0 16px 16px', textAlign: 'center' },
   deleteActions: { display: 'flex', gap: '12px' },
   cancelBtn: { flex: 1, padding: '12px', backgroundColor: '#f1f5f9', color: '#1e293b', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
-  removeBtn: { flex: 1, padding: '12px', backgroundColor: '#f59e0b', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
   deleteBtn: { flex: 1, padding: '12px', backgroundColor: '#dc2626', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
   // iOS-style delete modal
   deleteModal: { backgroundColor: '#ffffff', borderRadius: '14px', width: '100%', maxWidth: '300px', overflow: 'hidden' },
