@@ -157,7 +157,8 @@ const AppShell = ({ children, showNav = false }) => {
 const offlineAllowedRoutes = ['/downloads', '/view-file'];
 
 function AppContent() {
-  const { loading, isAuthenticated, isProfileComplete, refreshProfile } = useAuth();
+  const { loading, isAuthenticated, isProfileComplete, userProfile, refreshProfile } = useAuth();
+  const isAdmin = userProfile?.is_admin === true;
   const { isOffline } = useOffline();
   const location = useLocation();
   const navigate = useNavigate();
@@ -539,7 +540,9 @@ function AppContent() {
               ? <Navigate to="/" replace />
               : !isProfileComplete
                 ? <Navigate to="/profile-complete" replace />
-                : <AppShell showNav={showBottomNav}><ManageOrgCode /></AppShell>
+                : !isAdmin
+                  ? <Navigate to="/home" replace />
+                  : <AppShell showNav={showBottomNav}><ManageOrgCode /></AppShell>
           } />
           <Route path="/manage-analytics/*" element={
             !isAuthenticated
