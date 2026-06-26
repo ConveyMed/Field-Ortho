@@ -94,6 +94,7 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB (Supabase free tier limit)
 const CreatePostModal = () => {
   const { createModalOpen, closeCreateModal, addPost } = usePosts();
   const { userProfile, user } = useAuth();
+  const isAdmin = userProfile?.is_admin === true;
   const [content, setContent] = useState('');
   const [isVisible, setIsVisible] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -114,6 +115,11 @@ const CreatePostModal = () => {
 
   // Notify members
   const [notifyPush, setNotifyPush] = useState(false);
+
+  // Physician visibility + product tagging (admin-curated)
+  const [visibleToPhysicians, setVisibleToPhysicians] = useState(false);
+  const [postProductIds, setPostProductIds] = useState([]);
+  const [allProducts, setAllProducts] = useState([]);
 
   // Helper to get current datetime in local format for input
   const getCurrentDatetime = () => {
@@ -149,6 +155,26 @@ const CreatePostModal = () => {
     }
   }, [createModalOpen]);
 
+  // Load active products for admins to tag posts with product line(s)
+  useEffect(() => {
+    if (!createModalOpen || !isAdmin) return;
+    let active = true;
+    (async () => {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, is_active')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (!active) return;
+      if (error) {
+        console.error('Error loading products:', error);
+        return;
+      }
+      setAllProducts(data || []);
+    })();
+    return () => { active = false; };
+  }, [createModalOpen, isAdmin]);
+
   const clearAllMedia = () => {
     mediaFiles.forEach(m => URL.revokeObjectURL(m.preview));
     setMediaFiles([]);
@@ -157,6 +183,8 @@ const CreatePostModal = () => {
     setLinkName('');
     setShowLinkInput(false);
     setNotifyPush(false);
+    setVisibleToPhysicians(false);
+    setPostProductIds([]);
     setScheduledAt(getCurrentDatetime());
     if (imageInputRef.current) imageInputRef.current.value = '';
     if (videoInputRef.current) videoInputRef.current.value = '';
@@ -277,7 +305,12 @@ const CreatePostModal = () => {
       const scheduleTime = scheduledAt && new Date(scheduledAt) > new Date()
         ? new Date(scheduledAt).toISOString()
         : null;
-      await addPost(content.trim(), uploadedMedia, links, { notifyPush, scheduledAt: scheduleTime });
+      await addPost(content.trim(), uploadedMedia, links, {
+        notifyPush,
+        scheduledAt: scheduleTime,
+        visibleToPhysicians,
+        productIds: postProductIds,
+      });
       setContent('');
       clearAllMedia();
       closeCreateModal();
@@ -505,6 +538,49 @@ const CreatePostModal = () => {
             </button>
           </div>
         </div>
+
+        {/* Physician visibility + product tagging (admin only) */}
+        {isAdmin && (
+          <div style={styles.physicianSection}>
+            <button
+              style={styles.notifyOption}
+              onClick={() => setVisibleToPhysicians(!visibleToPhysicians)}
+              disabled={isUploading}
+            >
+              <CheckCircle checked={visibleToPhysicians} />
+              <span>Visible to physicians</span>
+            </button>
+            {allProducts.length > 0 && (
+              <div style={styles.productTagWrap}>
+                <span style={styles.productTagLabel}>Product lines:</span>
+                <div style={styles.productTagChips}>
+                  {allProducts.map(product => {
+                    const selected = postProductIds.includes(product.id);
+                    return (
+                      <button
+                        key={product.id}
+                        type="button"
+                        style={{
+                          ...styles.productTagChip,
+                          ...(selected ? styles.productTagChipActive : {}),
+                        }}
+                        onClick={() => setPostProductIds(prev =>
+                          prev.includes(product.id)
+                            ? prev.filter(id => id !== product.id)
+                            : [...prev, product.id]
+                        )}
+                        disabled={isUploading}
+                      >
+                        {product.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span style={styles.productTagHint}>None selected means shown to everyone</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Schedule Post */}
         <div style={styles.scheduleSection}>
@@ -938,6 +1014,48 @@ const styles = {
     color: '#475569',
     fontWeight: '500',
     transition: 'all 0.2s ease',
+  },
+  // Physician visibility + product tagging
+  physicianSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+    padding: '12px 16px',
+    borderTop: '1px solid #f1f5f9',
+  },
+  productTagWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  productTagLabel: {
+    fontSize: '14px',
+    fontWeight: '500',
+    color: 'var(--text-muted)',
+  },
+  productTagChips: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '8px',
+  },
+  productTagChip: {
+    padding: '8px 12px',
+    backgroundColor: 'var(--background-off-white)',
+    border: '1px solid #e2e8f0',
+    borderRadius: '20px',
+    cursor: 'pointer',
+    fontSize: '13px',
+    color: '#475569',
+    fontWeight: '500',
+  },
+  productTagChipActive: {
+    backgroundColor: '#eff6ff',
+    border: '1px solid var(--primary-blue)',
+    color: 'var(--primary-blue)',
+  },
+  productTagHint: {
+    fontSize: '12px',
+    color: 'var(--text-light)',
   },
   // Schedule styles
   scheduleSection: {

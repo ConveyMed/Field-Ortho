@@ -1,6 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDownloads } from '../context/DownloadsContext';
+import { useViewMode } from '../context/ViewModeContext';
+
+const CATEGORY_LABELS = {
+  brochures: 'Brochures',
+  surgical_techniques: 'Surgical Techniques',
+  training: 'Training',
+  videos: 'Videos',
+};
 
 // Icons
 const SearchIcon = () => (
@@ -111,7 +119,7 @@ const DownloadItem = ({ item, onView, onDelete }) => {
           {formatBytes(item.file_size)} | {formatDate(item.downloadedAt)}
         </p>
         <span style={styles.categoryBadge}>
-          {item.categoryType === 'brochures' ? 'Brochures' : item.categoryType === 'surgical_techniques' ? 'Surgical Techniques' : 'Training'}
+          {CATEGORY_LABELS[item.categoryType] || 'Training'}
         </span>
       </div>
       <button style={styles.deleteBtn} onClick={() => onDelete(item.id)}>
@@ -131,18 +139,26 @@ const Downloads = () => {
     clearAllDownloads,
   } = useDownloads();
 
+  const { isPhysicianView, topicAllowed } = useViewMode();
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [filter, setFilter] = useState('all'); // 'all', 'brochures', 'surgical_techniques', 'training'
+  const [filter, setFilter] = useState('all'); // 'all', 'brochures', 'surgical_techniques', 'training', 'videos'
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [clearConfirm, setClearConfirm] = useState(false);
 
   const storage = getStorageUsage();
 
+  // Physician view hides Training downloads (kept on device, just hidden) and the Training tab.
+  const filterTabs = ['all', 'brochures', 'surgical_techniques', 'training', 'videos']
+    .filter(tab => tab === 'all' || topicAllowed(tab));
+  const effectiveFilter = filterTabs.includes(filter) ? filter : 'all';
+
   // Filter downloads
   const filteredDownloads = downloads.filter(item => {
     const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = filter === 'all' || item.categoryType === filter;
-    return matchesSearch && matchesFilter;
+    const matchesFilter = effectiveFilter === 'all' || item.categoryType === effectiveFilter;
+    const matchesView = !isPhysicianView || topicAllowed(item.categoryType);
+    return matchesSearch && matchesFilter && matchesView;
   });
 
   const handleView = async (item) => {
@@ -220,16 +236,16 @@ const Downloads = () => {
 
           {/* Filter Tabs */}
           <div style={styles.filterTabs}>
-            {['all', 'brochures', 'surgical_techniques', 'training'].map(tab => (
+            {filterTabs.map(tab => (
               <button
                 key={tab}
                 style={{
                   ...styles.filterTab,
-                  ...(filter === tab ? styles.filterTabActive : {}),
+                  ...(effectiveFilter === tab ? styles.filterTabActive : {}),
                 }}
                 onClick={() => setFilter(tab)}
               >
-                {tab === 'all' ? 'All' : tab === 'brochures' ? 'Brochures' : tab === 'surgical_techniques' ? 'Surgical Techniques' : 'Training'}
+                {tab === 'all' ? 'All' : CATEGORY_LABELS[tab]}
               </button>
             ))}
           </div>

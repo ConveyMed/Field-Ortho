@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useAIChat } from '../context/AIChatContext';
 import { openInAppBrowser } from '../utils/browser';
+import PhysicianViewToggle from './PhysicianViewToggle';
+import PendingAssignmentNotice from './PendingAssignmentNotice';
+import { useViewMode } from '../context/ViewModeContext';
 
 // Icons
 const ChevronDownIcon = () => (
@@ -79,6 +82,7 @@ const CheckIcon = () => (
 const APP_NAME = 'Field AI';
 
 const AIChatPanel = () => {
+  const { needsProductAssignment } = useViewMode();
   const {
     isOpen,
     closeChat,
@@ -248,9 +252,12 @@ const AIChatPanel = () => {
             </div>
           </div>
 
-          <button style={styles.closeButton} onClick={closeChat}>
-            <ChevronDownIcon />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <PhysicianViewToggle />
+            <button style={styles.closeButton} onClick={closeChat}>
+              <ChevronDownIcon />
+            </button>
+          </div>
         </div>
 
         {/* Content Area */}
@@ -321,12 +328,16 @@ const AIChatPanel = () => {
                 </p>
               </div>
 
-              {/* Bot greeting - always shown first */}
-              <div style={styles.assistantMessage}>
-                <div style={styles.assistantContent}>
-                  <p style={styles.assistantMessageText}>Select a product below to start asking questions.</p>
+              {/* Bot greeting - always shown first (or pending notice for unassigned reps) */}
+              {needsProductAssignment ? (
+                <PendingAssignmentNotice screen="Field AI" />
+              ) : (
+                <div style={styles.assistantMessage}>
+                  <div style={styles.assistantContent}>
+                    <p style={styles.assistantMessageText}>Select a product below to start asking questions.</p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* User's product selection */}
               {selectedProduct && (

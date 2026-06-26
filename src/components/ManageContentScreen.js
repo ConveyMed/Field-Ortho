@@ -312,17 +312,18 @@ const CategoryModal = ({ isOpen, onClose, onSave, category, title }) => {
 };
 
 // Content Item Modal
-const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type, categories = [], itemCategoryIds = [] }) => {
+const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type, categories = [], itemCategoryIds = [], products = [] }) => {
   const modalRef = React.useRef(null);
   const scrollYRef = React.useRef(0);
   const { prepareVideoUpload } = useContent();
   const [formData, setFormData] = useState({
     title: '', description: '', thumbnail_url: '', file_url: '', file_name: '',
     external_link: '', external_link_label: '', quiz_link: '', quiz_link_label: '',
-    is_downloadable: true, use_company_logo: false,
+    is_downloadable: true, use_company_logo: false, hide_from_physician: false,
     bunny_video_id: '', bunny_video_status: '',
   });
   const [selectedCategories, setSelectedCategories] = useState([]);
+  const [selectedProducts, setSelectedProducts] = useState([]);
   const [categoryError, setCategoryError] = useState('');
   const [pendingVideoUpload, setPendingVideoUpload] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -375,6 +376,7 @@ const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type, categori
         quiz_link_label: item?.quiz_link_label || '',
         is_downloadable: item?.is_downloadable !== false,
         use_company_logo: item?.use_company_logo || false,
+        hide_from_physician: item?.hide_from_physician || false,
         bunny_video_id: item?.bunny_video_id || '',
         bunny_video_status: item?.bunny_video_status || '',
       });
@@ -382,9 +384,16 @@ const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type, categori
       setVideoCreating(false);
       setVideoUploadError('');
       setSelectedCategories(itemCategoryIds.length > 0 ? [...itemCategoryIds] : []);
+      setSelectedProducts(item?.productIds ? [...item.productIds] : []);
       setCategoryError('');
     }
   }, [isOpen, item, itemCategoryIds]);
+
+  const toggleProduct = (productId) => {
+    setSelectedProducts(prev =>
+      prev.includes(productId) ? prev.filter(id => id !== productId) : [...prev, productId]
+    );
+  };
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -485,7 +494,7 @@ const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type, categori
     }
     setSaving(true);
     try {
-      await onSave(formData, pendingVideoUpload, selectedCategories);
+      await onSave(formData, pendingVideoUpload, selectedCategories, selectedProducts);
       onClose();
     } catch (err) {
       console.error('Error saving content:', err);
@@ -536,6 +545,33 @@ const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type, categori
               })}
             </div>
             {categoryError && <p style={{ color: '#ef4444', fontSize: '13px', margin: '6px 0 0 0' }}>{categoryError}</p>}
+          </div>
+        )}
+
+        {products.length > 0 && (
+          <div style={{ marginBottom: '16px' }}>
+            <label style={styles.label}>Product Lines</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {products.map(p => {
+                const sel = selectedProducts.includes(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => toggleProduct(p.id)}
+                    style={{
+                      padding: '8px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+                      border: sel ? '2px solid #1e40af' : '2px solid #e2e8f0',
+                      backgroundColor: sel ? '#dbeafe' : '#ffffff',
+                      color: sel ? '#1e40af' : '#64748b',
+                    }}
+                  >
+                    {p.name}
+                  </button>
+                );
+              })}
+            </div>
+            <p style={{ fontSize: '12px', color: '#94a3b8', margin: '6px 0 0 0' }}>None selected means shown to everyone.</p>
           </div>
         )}
 
@@ -636,6 +672,12 @@ const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type, categori
               <div style={{ ...styles.toggleKnob, transform: formData.use_company_logo ? 'translateX(20px)' : 'translateX(0)' }} />
             </button>
           </div>
+          <div style={styles.toggleRow}>
+            <span style={styles.toggleLabel}>Hide from Physician View</span>
+            <button style={{ ...styles.toggle, backgroundColor: formData.hide_from_physician ? '#1e40af' : '#e2e8f0' }} onClick={() => handleChange('hide_from_physician', !formData.hide_from_physician)}>
+              <div style={{ ...styles.toggleKnob, transform: formData.hide_from_physician ? 'translateX(20px)' : 'translateX(0)' }} />
+            </button>
+          </div>
         </div>
 
         <button style={{ ...styles.saveBtn, opacity: !formData.title.trim() || saving ? 0.5 : 1 }} onClick={handleSave} disabled={!formData.title.trim() || saving}>
@@ -647,22 +689,29 @@ const ContentItemModal = ({ isOpen, onClose, onSave, item, title, type, categori
 };
 
 // Multi-Category Content Modal
-const MultiCategoryContentModal = ({ isOpen, onClose, onSave, brochuresCategories, surgicalTechniquesCategories, trainingCategories, type }) => {
+const MultiCategoryContentModal = ({ isOpen, onClose, onSave, brochuresCategories, surgicalTechniquesCategories, trainingCategories, videosCategories = [], products = [], type }) => {
   const modalRef = React.useRef(null);
   const scrollYRef = React.useRef(0);
   const { prepareVideoUpload } = useContent();
   const [formData, setFormData] = useState({
     title: '', description: '', thumbnail_url: '', file_url: '', file_name: '',
     external_link: '', external_link_label: '', quiz_link: '', quiz_link_label: '',
-    is_downloadable: true, use_company_logo: false,
+    is_downloadable: true, use_company_logo: false, hide_from_physician: false,
     bunny_video_id: '', bunny_video_status: '',
   });
   const [pendingVideoUpload, setPendingVideoUpload] = useState(null);
   const [selectedCategories, setSelectedCategories] = useState([]);
+  const [selectedProducts, setSelectedProducts] = useState([]);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [videoCreating, setVideoCreating] = useState(false);
   const [videoUploadError, setVideoUploadError] = useState('');
+
+  const toggleProduct = (productId) => {
+    setSelectedProducts(prev =>
+      prev.includes(productId) ? prev.filter(id => id !== productId) : [...prev, productId]
+    );
+  };
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -697,6 +746,7 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, brochuresCategorie
         bunny_video_id: '', bunny_video_status: '',
       });
       setSelectedCategories([]);
+      setSelectedProducts([]);
       setPendingVideoUpload(null);
       setVideoCreating(false);
       setVideoUploadError('');
@@ -801,7 +851,7 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, brochuresCategorie
     if (!formData.title.trim() || selectedCategories.length === 0) return;
     setSaving(true);
     try {
-      await onSave(formData, selectedCategories, pendingVideoUpload);
+      await onSave(formData, selectedCategories, pendingVideoUpload, selectedProducts);
       onClose();
     } catch (err) {
       console.error('Error saving content:', err);
@@ -876,6 +926,49 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, brochuresCategorie
                   <span style={styles.checkboxLabel}>{cat.title}</span>
                 </label>
               ))}
+            </div>
+          )}
+
+          {videosCategories.length > 0 && (
+            <div style={styles.categorySection}>
+              <div style={styles.categorySectionTitle}>Videos</div>
+              {videosCategories.map(cat => (
+                <label key={cat.id} style={styles.checkboxRow}>
+                  <input
+                    type="checkbox"
+                    checked={selectedCategories.includes(cat.id)}
+                    onChange={() => toggleCategory(cat.id)}
+                    style={styles.checkbox}
+                  />
+                  <span style={styles.checkboxLabel}>{cat.title}</span>
+                </label>
+              ))}
+            </div>
+          )}
+
+          {products.length > 0 && (
+            <div style={styles.categorySection}>
+              <div style={styles.categorySectionTitle}>Product Lines</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {products.map(p => {
+                  const sel = selectedProducts.includes(p.id);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => toggleProduct(p.id)}
+                      style={{
+                        padding: '8px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+                        border: sel ? '2px solid #1e40af' : '2px solid #e2e8f0',
+                        backgroundColor: sel ? '#dbeafe' : '#ffffff',
+                        color: sel ? '#1e40af' : '#64748b',
+                      }}
+                    >
+                      {p.name}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -983,6 +1076,12 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, brochuresCategorie
               <div style={{ ...styles.toggleKnob, transform: formData.use_company_logo ? 'translateX(20px)' : 'translateX(0)' }} />
             </button>
           </div>
+          <div style={styles.toggleRow}>
+            <span style={styles.toggleLabel}>Hide from Physician View</span>
+            <button style={{ ...styles.toggle, backgroundColor: formData.hide_from_physician ? '#1e40af' : '#e2e8f0' }} onClick={() => handleChange('hide_from_physician', !formData.hide_from_physician)}>
+              <div style={{ ...styles.toggleKnob, transform: formData.hide_from_physician ? 'translateX(20px)' : 'translateX(0)' }} />
+            </button>
+          </div>
         </div>
 
         <button style={{ ...styles.saveBtn, opacity: canSave ? 1 : 0.5 }} onClick={handleSave} disabled={!canSave}>
@@ -997,19 +1096,38 @@ const MultiCategoryContentModal = ({ isOpen, onClose, onSave, brochuresCategorie
 const ManageContentScreen = ({ type, title, backPath }) => {
   const navigate = useNavigate();
   const {
-    brochuresCategories, surgicalTechniquesCategories, trainingCategories,
+    brochuresCategories, surgicalTechniquesCategories, trainingCategories, videosCategories,
     addCategory, updateCategory, deleteCategory,
     addContentItem, addContentToCategories, updateContentItem, updateContentCategories, deleteContentItem,
     removeContentFromCategory,
     reorderCategories, reorderContentItems,
     startBackgroundUpload, videoUploads,
+    setContentProducts,
   } = useContent();
+
+  // Active product lines, for tagging content (admin).
+  const [products, setProducts] = useState([]);
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, is_active')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (!active) return;
+      if (!error) setProducts(data || []);
+    })();
+    return () => { active = false; };
+  }, []);
 
   const categories = type === 'brochures'
     ? brochuresCategories
     : type === 'surgical_techniques'
       ? surgicalTechniquesCategories
-      : trainingCategories;
+      : type === 'videos'
+        ? videosCategories
+        : trainingCategories;
 
   const [categoryModal, setCategoryModal] = useState({ open: false, category: null });
   const [contentModal, setContentModal] = useState({ open: false, item: null, categoryId: null });
@@ -1047,27 +1165,32 @@ const ManageContentScreen = ({ type, title, backPath }) => {
     }
   };
 
-  const handleSaveContent = async (data, pendingVideo, selectedCategoryIds) => {
+  const handleSaveContent = async (data, pendingVideo, selectedCategoryIds, selectedProductIds) => {
     let savedItem;
     if (contentModal.item) {
       await updateContentItem(contentModal.item.id, data);
       savedItem = contentModal.item;
+      await setContentProducts(contentModal.item.id, selectedProductIds || []);
       // Update category assignments if categories were changed
       if (selectedCategoryIds && selectedCategoryIds.length > 0) {
         await updateContentCategories(contentModal.item.id, selectedCategoryIds);
       }
     } else {
       savedItem = await addContentItem(contentModal.categoryId, data);
+      if (savedItem?.id) {
+        await setContentProducts(savedItem.id, selectedProductIds || []);
+      }
     }
-    console.log('handleSaveContent - pendingVideo:', pendingVideo, 'savedItem:', savedItem);
     if (pendingVideo && savedItem?.id) {
-      console.log('Starting background upload for', savedItem.id);
       startBackgroundUpload(savedItem.id, pendingVideo.file, pendingVideo.tusConfig);
     }
   };
 
-  const handleSaveMultiCategoryContent = async (data, selectedCategoryIds, pendingVideo) => {
+  const handleSaveMultiCategoryContent = async (data, selectedCategoryIds, pendingVideo, selectedProductIds) => {
     const savedItem = await addContentToCategories(data, selectedCategoryIds);
+    if (savedItem?.id) {
+      await setContentProducts(savedItem.id, selectedProductIds || []);
+    }
     if (pendingVideo && savedItem?.id) {
       startBackgroundUpload(savedItem.id, pendingVideo.file, pendingVideo.tusConfig);
     }
@@ -1133,7 +1256,7 @@ const ManageContentScreen = ({ type, title, backPath }) => {
                       onEditContent={(item) => setContentModal({ open: true, item, categoryId: category.id })}
                       onDeleteContent={(item) => {
                         // Count how many categories this item is in
-                        const allCats = [...brochuresCategories, ...surgicalTechniquesCategories, ...trainingCategories];
+                        const allCats = [...brochuresCategories, ...surgicalTechniquesCategories, ...trainingCategories, ...videosCategories];
                         const categoryCount = allCats.filter(c => c.items.some(i => i.id === item.id)).length;
                         setDeleteConfirm({ open: true, type: 'content', id: item.id, name: item.title, categoryId: category.id, isMultiCategory: categoryCount > 1 });
                       }}
@@ -1183,6 +1306,8 @@ const ManageContentScreen = ({ type, title, backPath }) => {
         type={type}
         categories={categories}
         itemCategoryIds={contentModal.item ? categories.filter(c => c.items.some(i => i.id === contentModal.item.id)).map(c => c.id) : [contentModal.categoryId].filter(Boolean)}
+        products={products}
+        itemProductIds={contentModal.item?.productIds || []}
       />
 
       <MultiCategoryContentModal
@@ -1192,6 +1317,8 @@ const ManageContentScreen = ({ type, title, backPath }) => {
         brochuresCategories={brochuresCategories}
         surgicalTechniquesCategories={surgicalTechniquesCategories}
         trainingCategories={trainingCategories}
+        videosCategories={videosCategories}
+        products={products}
         type={type}
       />
 

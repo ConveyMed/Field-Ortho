@@ -3,6 +3,9 @@ import ReactDOM from 'react-dom';
 import { useContent } from '../context/ContentContext';
 import { useDownloads } from '../context/DownloadsContext';
 import { useAnalytics } from '../context/AnalyticsContext';
+import { useViewMode } from '../context/ViewModeContext';
+import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
+import PendingAssignmentNotice from './PendingAssignmentNotice';
 import { openInAppBrowser } from '../utils/browser';
 import { getSecureEmbedUrl, getBunnyVideoStatus } from '../services/bunnyVideo';
 import { supabase } from '../config/supabase';
@@ -484,6 +487,7 @@ const ContentLibraryScreen = ({ type, title, hideHeader }) => {
     brochuresCategories,
     surgicalTechniquesCategories,
     trainingCategories,
+    videosCategories,
     loading: contentLoading,
     refreshContent,
   } = useContent();
@@ -495,6 +499,12 @@ const ContentLibraryScreen = ({ type, title, hideHeader }) => {
   } = useDownloads();
 
   const { trackAssetEvent } = useAnalytics();
+  const { isPhysicianView, restrictByProduct, contentItemAllowed, needsProductAssignment, refreshAssignedProducts } = useViewMode();
+
+  // Pull fresh content + assignments when the user opens the library, returns
+  // to the app, or reconnects, so newly assigned products / new content appear
+  // without a manual refresh. Existing items stay on screen meanwhile.
+  useRefreshOnFocus(() => { refreshContent(); refreshAssignedProducts(); });
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
@@ -505,24 +515,38 @@ const ContentLibraryScreen = ({ type, title, hideHeader }) => {
   }, [refreshContent]);
 
   // Get categories based on type
-  const categories = type === 'brochures' ? brochuresCategories : type === 'training' ? trainingCategories : surgicalTechniquesCategories;
+  const categories = type === 'brochures'
+    ? brochuresCategories
+    : type === 'training'
+      ? trainingCategories
+      : type === 'videos'
+        ? videosCategories
+        : surgicalTechniquesCategories;
 
   // Add type to each category for reference
   const categoriesWithType = categories.map(c => ({ ...c, type }));
 
-  // Filter categories/items by search
+  // Filter items by view mode (role + product) and search.
   const filteredCategories = useMemo(() => {
-    if (!searchQuery.trim()) return categoriesWithType;
+    const query = searchQuery.trim().toLowerCase();
+    const restricted = isPhysicianView || restrictByProduct;
 
-    const query = searchQuery.toLowerCase();
-    return categoriesWithType.map(category => ({
-      ...category,
-      items: category.items.filter(item =>
-        item.title.toLowerCase().includes(query) ||
-        item.description?.toLowerCase().includes(query)
-      ),
-    })).filter(category => category.items.length > 0);
-  }, [categoriesWithType, searchQuery]);
+    return categoriesWithType
+      .map(category => ({
+        ...category,
+        items: category.items.filter(item => {
+          if (!contentItemAllowed(item, item.productIds)) return false;
+          if (!query) return true;
+          return (
+            item.title.toLowerCase().includes(query) ||
+            item.description?.toLowerCase().includes(query)
+          );
+        }),
+      }))
+      // When searching or in a restricted view, drop now-empty categories.
+      // Unrestricted with no search keeps empty categories (original behavior).
+      .filter(category => (query || restricted) ? category.items.length > 0 : true);
+  }, [categoriesWithType, searchQuery, isPhysicianView, restrictByProduct, contentItemAllowed]);
 
   const handleItemClick = (item) => {
     setSelectedItem(item);
@@ -589,7 +613,9 @@ const ContentLibraryScreen = ({ type, title, hideHeader }) => {
           </div>
 
           {/* Categories */}
-          {filteredCategories.length > 0 ? (
+          {needsProductAssignment ? (
+            <PendingAssignmentNotice screen="Resources" />
+          ) : filteredCategories.length > 0 ? (
             filteredCategories.map(category => (
               <CategorySection
                 key={category.id}

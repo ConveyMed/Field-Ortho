@@ -1,9 +1,11 @@
 import * as tus from 'tus-js-client';
 
-const isCapacitor = window.location.protocol === 'capacitor:' || window.location.protocol === 'ionic:';
-const FUNCTIONS_BASE = isCapacitor
-  ? `${process.env.REACT_APP_SITE_URL || window.location.origin}/.netlify/functions/bunny-video`
-  : '/.netlify/functions/bunny-video';
+// Always target the canonical site's function host (REACT_APP_SITE_URL), on web
+// and native alike. This keeps preview/staging deploys (whose own Netlify site
+// has no Bunny credentials) pointed at the production bunny-video function,
+// which is configured and returns permissive CORS. On production web this is
+// the same origin, so behavior is unchanged.
+const FUNCTIONS_BASE = `${process.env.REACT_APP_SITE_URL || window.location.origin}/.netlify/functions/bunny-video`;
 
 export async function createBunnyVideo(title) {
   const res = await fetch(`${FUNCTIONS_BASE}?action=create`, {

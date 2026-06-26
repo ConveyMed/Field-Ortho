@@ -1,30 +1,41 @@
 import { useState } from 'react';
 import ContentLibraryScreen from '../components/ContentLibraryScreen';
+import { useViewMode } from '../context/ViewModeContext';
+import PhysicianViewToggle from '../components/PhysicianViewToggle';
 
-const TABS = [
+const ALL_TABS = [
   { id: 'brochures', label: 'Brochures' },
   { id: 'surgical_techniques', label: 'Surgical Techniques' },
   { id: 'training', label: 'Training' },
+  { id: 'videos', label: 'Videos' },
 ];
 
 const Resources = () => {
+  const { isPhysicianView, topicAllowed } = useViewMode();
   const [activeTab, setActiveTab] = useState('brochures');
+
+  // Physician view hides the Training topic; the section is named "Resources".
+  const tabs = ALL_TABS.filter(tab => topicAllowed(tab.id));
+  const effectiveTab = tabs.some(t => t.id === activeTab) ? activeTab : (tabs[0]?.id || 'brochures');
 
   return (
     <div style={styles.container}>
       {/* Header */}
       <header style={styles.header}>
         <div style={styles.headerInner}>
-          <h1 style={styles.headerTitle}>Sales Tools</h1>
+          <div style={styles.viewToggleWrapper}>
+            <PhysicianViewToggle />
+          </div>
+          <h1 style={styles.headerTitle}>{isPhysicianView ? 'Resources' : 'Sales Tools'}</h1>
         </div>
         {/* Tab Bar */}
         <div style={styles.tabBar}>
-          {TABS.map(tab => (
+          {tabs.map(tab => (
             <button
               key={tab.id}
               style={{
                 ...styles.tab,
-                ...(activeTab === tab.id ? styles.tabActive : {}),
+                ...(effectiveTab === tab.id ? styles.tabActive : {}),
               }}
               onClick={() => setActiveTab(tab.id)}
             >
@@ -38,9 +49,9 @@ const Resources = () => {
       {/* Content */}
       <div style={styles.content}>
         <ContentLibraryScreen
-          key={activeTab}
-          type={activeTab}
-          title={TABS.find(t => t.id === activeTab)?.label || 'Resources'}
+          key={effectiveTab}
+          type={effectiveTab}
+          title={tabs.find(t => t.id === effectiveTab)?.label || 'Resources'}
           hideHeader
         />
       </div>
@@ -69,6 +80,13 @@ const styles = {
     padding: '12px 16px 8px 16px',
     maxWidth: '600px',
     margin: '0 auto',
+    position: 'relative',
+  },
+  viewToggleWrapper: {
+    position: 'absolute',
+    left: '16px',
+    top: '50%',
+    transform: 'translateY(-50%)',
   },
   headerTitle: {
     color: 'var(--primary-blue)',

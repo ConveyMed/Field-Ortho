@@ -49,6 +49,15 @@ const UsersIcon = () => (
   </svg>
 );
 
+const PackageIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M16.5 9.4 7.5 4.21" />
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+    <line x1="12" y1="22.08" x2="12" y2="12" />
+  </svg>
+);
+
 const BellIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -82,6 +91,13 @@ const TrainingIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
     <path d="M6 12v5c3 3 9 3 12 0v-5" />
+  </svg>
+);
+
+const VideoIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="23 7 16 12 23 17 23 7" />
+    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
   </svg>
 );
 
@@ -267,6 +283,13 @@ const Profile = () => {
                   </div>
                   <ChevronRightIcon />
                 </button>
+                <button style={styles.menuItem} onClick={() => navigate('/manage-products')}>
+                  <div style={styles.menuItemWithIcon}>
+                    <PackageIcon />
+                    <span style={styles.menuText}>Manage Products</span>
+                  </div>
+                  <ChevronRightIcon />
+                </button>
                 <button style={styles.menuItem} onClick={() => navigate('/manage-brochures')}>
                   <div style={styles.menuItemWithIcon}>
                     <LibraryIcon />
@@ -285,6 +308,13 @@ const Profile = () => {
                   <div style={styles.menuItemWithIcon}>
                     <DocumentIcon />
                     <span style={styles.menuText}>Manage Training</span>
+                  </div>
+                  <ChevronRightIcon />
+                </button>
+                <button style={styles.menuItem} onClick={() => navigate('/manage-videos')}>
+                  <div style={styles.menuItemWithIcon}>
+                    <VideoIcon />
+                    <span style={styles.menuText}>Manage Videos</span>
                   </div>
                   <ChevronRightIcon />
                 </button>

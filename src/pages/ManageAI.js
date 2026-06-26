@@ -45,17 +45,19 @@ const ManageAI = () => {
   const [sourceUrl, setSourceUrl] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [showRefreshPrompt, setShowRefreshPrompt] = useState(false);
+  const [productLines, setProductLines] = useState([]);
 
   // Fetch products
   useEffect(() => {
     fetchProducts();
+    fetchProductLines();
   }, []);
 
   const fetchProducts = async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('product_docs')
-      .select('id, product_name, page_count, created_at, updated_at')
+      .select('id, product_name, page_count, created_at, updated_at, product_id')
       .order('product_name');
 
     if (error) {
@@ -64,6 +66,28 @@ const ManageAI = () => {
       setProducts(data || []);
     }
     setLoading(false);
+  };
+
+  const fetchProductLines = async () => {
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, name')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+    if (!error) setProductLines(data || []);
+  };
+
+  // Link an AI sub-product doc to a product line (for sales-side filtering).
+  const updateProductLine = async (docId, productId) => {
+    const { error } = await supabase
+      .from('product_docs')
+      .update({ product_id: productId || null })
+      .eq('id', docId);
+    if (error) {
+      setError('Failed to update product line');
+      return;
+    }
+    setProducts(prev => prev.map(p => (p.id === docId ? { ...p, product_id: productId || null } : p)));
   };
 
   const handleFileChange = (e) => {
@@ -318,6 +342,22 @@ const ManageAI = () => {
                   <p style={styles.productMeta}>
                     {product.page_count || 1} pages | Updated {formatDate(product.updated_at || product.created_at)}
                   </p>
+                  {productLines.length > 0 && (
+                    <select
+                      value={product.product_id || ''}
+                      onChange={(e) => updateProductLine(product.id, e.target.value || null)}
+                      style={{
+                        marginTop: '8px', padding: '6px 10px', borderRadius: '8px',
+                        border: '1px solid #e2e8f0', fontSize: '13px', color: 'var(--text-dark)',
+                        backgroundColor: 'var(--background-off-white)', outline: 'none', maxWidth: '220px',
+                      }}
+                    >
+                      <option value="">All product lines (unscoped)</option>
+                      {productLines.map(pl => (
+                        <option key={pl.id} value={pl.id}>{pl.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <button
                   style={styles.deleteButton}

@@ -1,0 +1,1 @@
+Sales Tools tabs reorganized: Brochures, Surgical Techniques, and Training. Analytics now report against FieldOrtho's own dashboard for accurate per-rep insights. AI assistant shows a clearer disclaimer the first time you use it.

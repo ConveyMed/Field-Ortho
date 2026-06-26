@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
+import { useViewMode } from './ViewModeContext';
 import { supabase } from '../config/supabase';
 import { logNotificationClick } from '../services/analytics';
 
@@ -15,6 +16,7 @@ export const useActivityNotifications = () => {
 
 export const ActivityNotificationsProvider = ({ children }) => {
   const { user, userProfile } = useAuth();
+  const { postAllowed } = useViewMode();
 
   // Notifications state
   const [notifications, setNotifications] = useState([]);
@@ -86,25 +88,37 @@ export const ActivityNotificationsProvider = ({ children }) => {
         const postIds = [...new Set(notificationsResult.data.map(n => n.post_id).filter(Boolean))];
 
         // Fetch actors and posts in parallel
-        const [actorsResult, postsResult] = await Promise.all([
+        const [actorsResult, postsResult, postProductsResult] = await Promise.all([
           actorIds.length > 0
             ? supabase.from('users').select('id, first_name, last_name, profile_image_url').in('id', actorIds)
             : Promise.resolve({ data: [] }),
           postIds.length > 0
-            ? supabase.from('posts').select('id, content').in('id', postIds)
+            ? supabase.from('posts').select('id, content, visible_to_physicians').in('id', postIds)
+            : Promise.resolve({ data: [] }),
+          postIds.length > 0
+            ? supabase.from('post_products').select('post_id, product_id').in('post_id', postIds)
             : Promise.resolve({ data: [] })
         ]);
 
         // Build lookup maps
         const actorsMap = (actorsResult.data || []).reduce((acc, u) => { acc[u.id] = u; return acc; }, {});
         const postsMap = (postsResult.data || []).reduce((acc, p) => { acc[p.id] = p; return acc; }, {});
+        const productsByPost = {};
+        (postProductsResult.data || []).forEach(row => {
+          if (!productsByPost[row.post_id]) productsByPost[row.post_id] = [];
+          productsByPost[row.post_id].push(row.product_id);
+        });
 
-        // Enrich notifications with actor and post data
-        const enrichedNotifications = notificationsResult.data.map(n => ({
-          ...n,
-          actor: actorsMap[n.actor_id] || null,
-          post: postsMap[n.post_id] || null,
-        }));
+        // Enrich notifications with actor + post data (incl. the post's product tags).
+        // The visibility filter is applied at derive time below (uses current view mode).
+        const enrichedNotifications = notificationsResult.data.map(n => {
+          const post = postsMap[n.post_id] || null;
+          return {
+            ...n,
+            actor: actorsMap[n.actor_id] || null,
+            post: post ? { ...post, productIds: productsByPost[n.post_id] || [] } : null,
+          };
+        });
 
         setNotifications(enrichedNotifications);
       } else {
@@ -151,6 +165,19 @@ export const ActivityNotificationsProvider = ({ children }) => {
     }
   };
 
+  // Hide any post-related activity (new post, comment, like, reply) for posts this
+  // user isn't allowed to see — by role + product group. Uses CURRENT view mode, so
+  // it stays correct after the view toggle / once product assignments load.
+  const canSeeNotifPost = useCallback((n) => {
+    if (n.post_id && n.post) {
+      return postAllowed(
+        { visible_to_physicians: n.post.visible_to_physicians },
+        n.post.productIds || []
+      );
+    }
+    return true;
+  }, [postAllowed]);
+
   // Get "NEW" notifications (created after last_checked_at) - controls bell badge
   const getNewNotifications = useCallback(() => {
     // Use user creation date as fallback if no last_checked_at
@@ -161,18 +188,20 @@ export const ActivityNotificationsProvider = ({ children }) => {
     return notifications.filter(n => {
       // Don't show user's own activity
       if (n.actor_id === user?.id) return false;
+      if (!canSeeNotifPost(n)) return false;
       return new Date(n.created_at) > lastCheckedAt;
     });
-  }, [notifications, userState, userProfile, user]);
+  }, [notifications, userState, userProfile, user, canSeeNotifPost]);
 
   // Get UNREAD notifications (not in notification_reads) - controls bold/unbold in list
   const getUnreadNotifications = useCallback(() => {
     return notifications.filter(n => {
       // Don't show user's own activity
       if (n.actor_id === user?.id) return false;
+      if (!canSeeNotifPost(n)) return false;
       return !notificationReads.has(n.id);
     });
-  }, [notifications, notificationReads, user?.id]);
+  }, [notifications, notificationReads, user?.id, canSeeNotifPost]);
 
   // Check if notification is read
   const isNotificationRead = useCallback((notificationId) => {
@@ -213,6 +242,7 @@ export const ActivityNotificationsProvider = ({ children }) => {
 
     return notifications.filter(n => {
       if (n.actor_id === user?.id) return false;
+      if (!canSeeNotifPost(n)) return false;
 
       const createdAt = new Date(n.created_at);
       const isRead = notificationReads.has(n.id);
@@ -225,7 +255,7 @@ export const ActivityNotificationsProvider = ({ children }) => {
         return createdAt > seventyTwoHoursAgo;
       }
     });
-  }, [notifications, user?.id, notificationReads]);
+  }, [notifications, user?.id, notificationReads, canSeeNotifPost]);
 
   // Group notifications for display
   const getGroupedNotifications = useCallback(() => {

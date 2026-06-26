@@ -31,3 +31,14 @@ keys/
 
 # Local Netlify folder
 .netlify
+
+# Per-app deviation map (local-only, not committed)
+WHATS_DIFFERENT.md
+
+# Internal scope / transcripts / planning (local-only, never committed)
+FieldOrtho-scope-recording.txt
+recordings/
+*-scope-recording.txt
+V2_PHASED_PLAN.md
+V2_WALKTHROUGH.md
+V2_WALKTHROUGH.pdf

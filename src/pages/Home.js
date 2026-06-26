@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { usePosts } from '../context/PostsContext';
+import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 import { useAuth } from '../context/AuthContext';
+import PhysicianViewToggle from '../components/PhysicianViewToggle';
+import { useViewMode } from '../context/ViewModeContext';
+import PendingAssignmentNotice from '../components/PendingAssignmentNotice';
 import { useActivityNotifications } from '../context/ActivityNotificationsContext';
 import { useAppSettings } from '../context/AppSettingsContext';
 import { NotificationBell, NotificationBanner, NotificationPanel, NewCommentsDivider } from '../components/ActivityNotifications';
@@ -158,6 +162,10 @@ const Post = ({ post, currentUserId, isAdmin, onEditPost }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showCommentDeleteConfirm, setShowCommentDeleteConfirm] = useState(null); // comment id to delete
   const [newDividerIndex, setNewDividerIndex] = useState(null);
+
+  // Client wants one-way broadcast: posts are read-only for everyone, with no
+  // likes or comments. Flip this to re-enable the engagement UI.
+  const ENGAGEMENT_ENABLED = false;
 
   const isLiked = isPostLiked(post.id);
   const isBookmarked = isPostBookmarked(post.id);
@@ -502,6 +510,7 @@ const Post = ({ post, currentUserId, isAdmin, onEditPost }) => {
       )}
 
       {/* Engagement Stats */}
+      {ENGAGEMENT_ENABLED && (
       <div style={styles.engagementStats}>
         <span style={styles.stat}>
           <span style={styles.likeIcon}>
@@ -511,9 +520,12 @@ const Post = ({ post, currentUserId, isAdmin, onEditPost }) => {
         </span>
         <span style={styles.stat}>{totalComments} comments</span>
       </div>
+      )}
 
       {/* Action Buttons */}
       <div style={styles.actionButtons}>
+        {ENGAGEMENT_ENABLED && (
+        <>
         <button
           style={{
             ...styles.actionButton,
@@ -531,6 +543,8 @@ const Post = ({ post, currentUserId, isAdmin, onEditPost }) => {
           <CommentIcon />
           <span>Comment</span>
         </button>
+        </>
+        )}
         <button
           style={{
             ...styles.actionButton,
@@ -544,7 +558,7 @@ const Post = ({ post, currentUserId, isAdmin, onEditPost }) => {
       </div>
 
       {/* Comment Preview (when collapsed) */}
-      {!showComments && previewComment && (
+      {ENGAGEMENT_ENABLED && !showComments && previewComment && (
         <div
           style={styles.commentPreview}
           onClick={() => setShowComments(true)}
@@ -562,7 +576,7 @@ const Post = ({ post, currentUserId, isAdmin, onEditPost }) => {
       )}
 
       {/* Expanded Comments Section */}
-      {showComments && (
+      {ENGAGEMENT_ENABLED && showComments && (
         <div style={styles.commentsSection}>
           {/* Comments list */}
           {displayedComments.length > 0 ? (
@@ -695,11 +709,31 @@ const XIcon = () => (
 
 // Edit Post Modal Component
 const EditPostModal = ({ post, onClose, onSave }) => {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
+  const isAdmin = userProfile?.is_admin === true;
   const [content, setContent] = useState(post?.content || '');
   const [existingImages, setExistingImages] = useState(post?.images || []);
   const [existingVideos, setExistingVideos] = useState(post?.videos || []);
   const [links, setLinks] = useState(post?.links || []);
+  const [visibleToPhysicians, setVisibleToPhysicians] = useState(post?.visibleToPhysicians === true);
+  const [postProductIds, setPostProductIds] = useState(post?.productIds || []);
+  const [allProducts, setAllProducts] = useState([]);
+
+  React.useEffect(() => {
+    if (!isAdmin) return;
+    let active = true;
+    (async () => {
+      const { supabase } = await import('../config/supabase');
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, is_active')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (!active) return;
+      if (!error) setAllProducts(data || []);
+    })();
+    return () => { active = false; };
+  }, [isAdmin]);
   const [newMediaFiles, setNewMediaFiles] = useState([]);
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
@@ -835,6 +869,12 @@ const EditPostModal = ({ post, onClose, onSave }) => {
         videos: [...existingVideos, ...newVideos],
         links,
       };
+
+      // Only admins can change physician visibility / product tags.
+      if (isAdmin) {
+        updatedData.visibleToPhysicians = visibleToPhysicians;
+        updatedData.productIds = postProductIds;
+      }
 
       await onSave(updatedData);
       handleClose();
@@ -1016,6 +1056,52 @@ const EditPostModal = ({ post, onClose, onSave }) => {
             </div>
           )}
         </div>
+
+        {/* Physician visibility + product tags (admin only) */}
+        {isAdmin && (
+          <div style={{ padding: '12px 16px', borderTop: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={() => setVisibleToPhysicians(v => !v)}
+              disabled={isSaving}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px',
+                borderRadius: '20px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', alignSelf: 'flex-start',
+                backgroundColor: visibleToPhysicians ? '#eff6ff' : 'var(--background-off-white)',
+                border: visibleToPhysicians ? '1px solid var(--primary-blue)' : '1px solid #e2e8f0',
+                color: visibleToPhysicians ? 'var(--primary-blue)' : '#475569',
+              }}
+            >
+              {visibleToPhysicians ? 'Visible to physicians' : 'Not visible to physicians'}
+            </button>
+            {allProducts.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span style={{ fontSize: '14px', fontWeight: '500', color: 'var(--text-muted)' }}>Product lines:</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {allProducts.map(p => {
+                    const sel = postProductIds.includes(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => setPostProductIds(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id])}
+                        style={{
+                          padding: '8px 12px', borderRadius: '20px', cursor: 'pointer', fontSize: '13px', fontWeight: '500',
+                          backgroundColor: sel ? '#eff6ff' : 'var(--background-off-white)',
+                          border: sel ? '1px solid var(--primary-blue)' : '1px solid #e2e8f0',
+                          color: sel ? 'var(--primary-blue)' : '#475569',
+                        }}
+                      >
+                        {p.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Hidden file inputs */}
         <input
@@ -1930,8 +2016,13 @@ const ClockIcon = () => (
 
 const Home = () => {
   const { posts, scheduledPosts, loading, openCreateModal, isPostBookmarked, updatePost, loadScheduledPosts, updateScheduledPost, deleteScheduledPost, refreshPosts } = usePosts();
+  const { postAllowed, needsProductAssignment, refreshAssignedProducts } = useViewMode();
   const { user, userProfile } = useAuth();
   const { triggerBanner, scrollTarget, clearScrollTarget } = useActivityNotifications();
+
+  // Keep the feed fresh on navigation / app-resume / reconnect (realtime is the
+  // live path; this is the reliability fallback). Cached posts stay visible.
+  useRefreshOnFocus(() => { refreshPosts(); refreshAssignedProducts(); });
   const [searchQuery, setSearchQuery] = useState('');
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [editingPost, setEditingPost] = useState(null);
@@ -2069,6 +2160,11 @@ const Home = () => {
 
   // Filter posts based on search and bookmarks
   const filteredPosts = sortedPosts.filter(post => {
+    // View-mode filter (physician role gate + product gate). Client-side only.
+    if (!postAllowed({ visible_to_physicians: post.visibleToPhysicians }, post.productIds)) {
+      return false;
+    }
+
     // Bookmark filter
     if (showBookmarks && !isPostBookmarked(post.id)) {
       return false;
@@ -2097,6 +2193,9 @@ const Home = () => {
       {/* Header - full width */}
       <header style={styles.header}>
         <div style={styles.headerInner}>
+          <div style={styles.viewToggleWrapper}>
+            <PhysicianViewToggle />
+          </div>
           <h1 style={styles.headerTitle}>Field Connect</h1>
           <div style={styles.bellWrapper}>
             <NotificationBell bellRef={bellRef} />
@@ -2197,6 +2296,8 @@ const Home = () => {
                   <PostSkeleton />
                   <PostSkeleton />
                 </>
+              ) : needsProductAssignment ? (
+                <PendingAssignmentNotice screen="Field Connect" />
               ) : filteredPosts.length === 0 ? (
                 <div style={styles.emptyState}>
                   <div style={styles.emptyIcon}>
@@ -2214,9 +2315,11 @@ const Home = () => {
                       ? `No posts matching "${searchQuery}"`
                       : showBookmarks
                       ? 'Save posts to see them here'
-                      : 'Be the first to share something with the team'}
+                      : isAdmin
+                      ? 'Be the first to share something with the team'
+                      : 'Updates from your team will appear here'}
                   </p>
-                  {!searchQuery && !showBookmarks && (
+                  {!searchQuery && !showBookmarks && isAdmin && (
                     <button style={styles.emptyButton} onClick={openCreateModal}>
                       Create Post
                     </button>
@@ -2379,8 +2482,8 @@ const Home = () => {
         />
       )}
 
-      {/* Create Post FAB - All users */}
-      {(
+      {/* Create Post FAB - admins only */}
+      {isAdmin && (
         <button
           style={styles.fab}
           onClick={openCreateModal}
@@ -2440,6 +2543,12 @@ const styles = {
   bellWrapper: {
     position: 'absolute',
     right: '16px',
+    top: '50%',
+    transform: 'translateY(-50%)',
+  },
+  viewToggleWrapper: {
+    position: 'absolute',
+    left: '16px',
     top: '50%',
     transform: 'translateY(-50%)',
   },

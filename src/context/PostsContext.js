@@ -284,13 +284,16 @@ export const PostsProvider = ({ children }) => {
       const userIds = [...new Set(postsData?.map(p => p.user_id).filter(Boolean))];
       const postIds = postsData?.map(p => p.id) || [];
 
-      // Fetch users and comments in parallel
-      const [usersResult, commentsResult] = await Promise.all([
+      // Fetch users, comments, and post product tags in parallel
+      const [usersResult, commentsResult, postProductsResult] = await Promise.all([
         userIds.length > 0
           ? supabase.from('users').select('id, first_name, last_name, title, profile_image_url').in('id', userIds)
           : Promise.resolve({ data: [] }),
         postIds.length > 0
           ? supabase.from('post_comments').select('*').in('post_id', postIds).order('created_at', { ascending: true })
+          : Promise.resolve({ data: [] }),
+        postIds.length > 0
+          ? supabase.from('post_products').select('post_id, product_id').in('post_id', postIds)
           : Promise.resolve({ data: [] })
       ]);
 
@@ -299,6 +302,13 @@ export const PostsProvider = ({ children }) => {
         acc[u.id] = u;
         return acc;
       }, {});
+
+      // Map each post to its product line tags (2.0 filtering). Absence = unscoped = everyone.
+      const productsByPost = {};
+      (postProductsResult.data || []).forEach(row => {
+        if (!productsByPost[row.post_id]) productsByPost[row.post_id] = [];
+        productsByPost[row.post_id].push(row.product_id);
+      });
 
       // Process comments
       let commentsPreviewMap = {};
@@ -365,6 +375,8 @@ export const PostsProvider = ({ children }) => {
           isPinned: post.is_pinned || false,
           notifyPush: post.notify_push || false,
           scheduledAt: post.scheduled_at,
+          visibleToPhysicians: post.visible_to_physicians === true,
+          productIds: productsByPost[post.id] || [],
         };
       });
 
@@ -713,7 +725,7 @@ export const PostsProvider = ({ children }) => {
 
     const images = media.filter(m => m.type === 'image').map(m => m.url);
     const videos = media.filter(m => m.type === 'video').map(m => m.url);
-    const { notifyPush = false, scheduledAt = null } = options;
+    const { notifyPush = false, scheduledAt = null, visibleToPhysicians = false, productIds = [] } = options;
 
     // If scheduledAt is provided and in the future, it's a scheduled post
     const isScheduled = scheduledAt && new Date(scheduledAt) > new Date();
@@ -729,6 +741,7 @@ export const PostsProvider = ({ children }) => {
           links,
           notify_push: notifyPush,
           scheduled_at: scheduledAt || new Date().toISOString(),
+          visible_to_physicians: visibleToPhysicians,
         })
         .select()
         .single();
@@ -736,6 +749,13 @@ export const PostsProvider = ({ children }) => {
       if (error) {
         console.error('Error creating post:', error.message || error);
         throw new Error(error.message || 'Failed to create post');
+      }
+
+      // Tag the post with product line(s). Absence of rows = unscoped = visible to all (today's behavior).
+      if (productIds.length) {
+        const rows = productIds.map(pid => ({ post_id: data.id, product_id: pid }));
+        const { error: tagErr } = await supabase.from('post_products').insert(rows);
+        if (tagErr) console.error('Error tagging post products:', tagErr.message || tagErr);
       }
 
       // Add to local state
@@ -894,6 +914,7 @@ export const PostsProvider = ({ children }) => {
     if (updates.images !== undefined) dbUpdates.images = updates.images;
     if (updates.videos !== undefined) dbUpdates.videos = updates.videos;
     if (updates.links !== undefined) dbUpdates.links = updates.links;
+    if (updates.visibleToPhysicians !== undefined) dbUpdates.visible_to_physicians = updates.visibleToPhysicians;
 
     // Optimistic update
     setPosts(prev => prev.map(p => {
@@ -906,6 +927,8 @@ export const PostsProvider = ({ children }) => {
           links: updates.links !== undefined ? updates.links : p.links,
           image: updates.images?.[0] || p.image,
           video: updates.videos?.[0] || p.video,
+          visibleToPhysicians: updates.visibleToPhysicians !== undefined ? updates.visibleToPhysicians : p.visibleToPhysicians,
+          productIds: updates.productIds !== undefined ? updates.productIds : p.productIds,
         };
       }
       return p;
@@ -922,6 +945,16 @@ export const PostsProvider = ({ children }) => {
         loadPosts();
         console.error('Error updating post:', error);
         throw error;
+      }
+
+      // Sync product line tags if provided (delete-all + reinsert).
+      if (updates.productIds !== undefined) {
+        await supabase.from('post_products').delete().eq('post_id', postId);
+        if (updates.productIds.length > 0) {
+          const rows = updates.productIds.map(pid => ({ post_id: postId, product_id: pid }));
+          const { error: tagErr } = await supabase.from('post_products').insert(rows);
+          if (tagErr) console.error('Error tagging post products:', tagErr.message || tagErr);
+        }
       }
     } catch (err) {
       console.error('Error updating post:', err);

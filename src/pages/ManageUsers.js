@@ -76,12 +76,76 @@ const ManageUsers = () => {
   const [editPhone, setEditPhone] = useState('');
   const [editRole, setEditRole] = useState('member');
 
+  // Product assignment (edited inline on each user row — single source of truth)
+  const [allProducts, setAllProducts] = useState([]);
+  const [assignments, setAssignments] = useState({}); // userId -> array of productIds
+
   // Settings
   const commentDeletePermission = getCommentDeletePermission();
 
   useEffect(() => {
     loadUsers();
+    loadProducts();
+    loadAssignments();
   }, []);
+
+  const loadProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, is_active')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      if (error) throw error;
+      setAllProducts(data || []);
+    } catch (error) {
+      console.error('Error loading products:', error);
+    }
+  };
+
+  const loadAssignments = async () => {
+    try {
+      const { data, error } = await supabase.from('user_products').select('user_id, product_id');
+      if (error) throw error;
+      const map = {};
+      (data || []).forEach(r => {
+        if (!map[r.user_id]) map[r.user_id] = [];
+        map[r.user_id].push(r.product_id);
+      });
+      setAssignments(map);
+    } catch (error) {
+      console.error('Error loading assignments:', error);
+    }
+  };
+
+  // Inline assignment edits — save immediately, single source of truth.
+  const toggleProductInline = async (userId, productId) => {
+    const current = assignments[userId] || [];
+    const has = current.includes(productId);
+    const next = has ? current.filter(id => id !== productId) : [...current, productId];
+    setAssignments(prev => ({ ...prev, [userId]: next }));
+    try {
+      if (has) {
+        await supabase.from('user_products').delete().eq('user_id', userId).eq('product_id', productId);
+      } else {
+        await supabase.from('user_products').insert({ user_id: userId, product_id: productId });
+      }
+    } catch (error) {
+      console.error('Assignment save failed:', error);
+      setAssignments(prev => ({ ...prev, [userId]: current })); // revert
+    }
+  };
+
+  const toggleAllInline = async (userId, value) => {
+    setUsers(prev => prev.map(u => (u.id === userId ? { ...u, all_products: value } : u)));
+    try {
+      await supabase.from('users').update({ all_products: value }).eq('id', userId);
+    } catch (error) {
+      console.error('All-products save failed:', error);
+      setUsers(prev => prev.map(u => (u.id === userId ? { ...u, all_products: !value } : u)));
+    }
+  };
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -122,6 +186,7 @@ const ManageUsers = () => {
   };
 
   const openUserDetail = (user) => {
+    // Product assignment is edited inline on the row; the modal handles identity/role/delete.
     setSelectedUser(user);
     setEditFirstName(user.first_name || '');
     setEditLastName(user.last_name || '');
@@ -175,12 +240,14 @@ const ManageUsers = () => {
 
     setDeleting(true);
     try {
-      const { error } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', selectedUser.id);
-
+      // Admin-delete via edge function: removes the target's auth account AND
+      // profile (service-role). A client-side table delete can't do either
+      // reliably — RLS blocks it and auth.users is untouchable from the client.
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { userId: selectedUser.id },
+      });
       if (error) throw error;
+      if (data && data.success === false) throw new Error(data.error || 'Delete failed');
 
       // Remove from local state
       setUsers(prev => prev.filter(u => u.id !== selectedUser.id));
@@ -333,37 +400,72 @@ const ManageUsers = () => {
               {filteredUsers.map(user => {
                 const role = getRoleBadge(user);
                 return (
-                  <button
-                    key={user.id}
-                    style={styles.userCard}
-                    onClick={() => openUserDetail(user)}
-                  >
-                    <div style={styles.userAvatar}>
-                      {user.profile_image_url ? (
-                        <img src={user.profile_image_url} alt="" style={styles.avatarImage} />
-                      ) : (
-                        <div style={styles.avatarPlaceholder}>
-                          <UserIcon />
-                        </div>
-                      )}
-                    </div>
-                    <div style={styles.userInfo}>
-                      <div style={styles.userNameRow}>
-                        <span style={styles.userName}>
-                          {user.first_name} {user.last_name}
-                        </span>
-                        <span style={{
-                          ...styles.roleBadge,
-                          color: role.color,
-                          backgroundColor: role.bg,
-                        }}>
-                          {role.label}
-                        </span>
+                  <div key={user.id} style={styles.userCard}>
+                    <div style={styles.userTopRow} onClick={() => openUserDetail(user)}>
+                      <div style={styles.userAvatar}>
+                        {user.profile_image_url ? (
+                          <img src={user.profile_image_url} alt="" style={styles.avatarImage} />
+                        ) : (
+                          <div style={styles.avatarPlaceholder}>
+                            <UserIcon />
+                          </div>
+                        )}
                       </div>
-                      <span style={styles.userTitle}>{user.title || 'No title'}</span>
-                      <span style={styles.userEmail}>{user.email}</span>
+                      <div style={styles.userInfo}>
+                        <div style={styles.userNameRow}>
+                          <span style={styles.userName}>
+                            {user.first_name} {user.last_name}
+                          </span>
+                          <span style={{
+                            ...styles.roleBadge,
+                            color: role.color,
+                            backgroundColor: role.bg,
+                          }}>
+                            {role.label}
+                          </span>
+                        </div>
+                        <span style={styles.userEmail}>{user.email}</span>
+                      </div>
                     </div>
-                  </button>
+
+                    {/* Inline product assignment */}
+                    {user.org_role === 'physician' ? (
+                      <div style={styles.pillRow}><span style={styles.pillNote}>Physician Subscriber</span></div>
+                    ) : allProducts.length === 0 ? (
+                      <div style={styles.pillRow}><span style={styles.pillNote}>No products yet</span></div>
+                    ) : (
+                      <div style={styles.pillRow}>
+                        <button
+                          type="button"
+                          onClick={() => toggleAllInline(user.id, !user.all_products)}
+                          style={{ ...styles.pill, ...(user.all_products ? styles.pillAll : {}) }}
+                        >
+                          All
+                        </button>
+                        {allProducts.map(p => {
+                          const sel = !user.all_products && (assignments[user.id] || []).includes(p.id);
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              disabled={user.all_products}
+                              onClick={() => toggleProductInline(user.id, p.id)}
+                              style={{
+                                ...styles.pill,
+                                ...(sel ? styles.pillActive : {}),
+                                ...(user.all_products ? styles.pillDisabled : {}),
+                              }}
+                            >
+                              {p.name}
+                            </button>
+                          );
+                        })}
+                        {!user.all_products && (assignments[user.id] || []).length === 0 && (
+                          <span style={styles.pillPending}>pending</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -500,6 +602,10 @@ const ManageUsers = () => {
                       {editRole === 'member' && 'Can view content and interact with posts'}
                     </p>
                   </div>
+
+                  <p style={styles.roleHint}>
+                    Product groups are assigned with the pills on each user's row.
+                  </p>
 
                   <div style={styles.joinedInfo}>
                     Joined {getTimeAgo(selectedUser.created_at)}
@@ -694,17 +800,63 @@ const styles = {
   },
   userCard: {
     display: 'flex',
-    alignItems: 'center',
-    gap: '14px',
-    padding: '16px',
+    flexDirection: 'column',
+    gap: '10px',
+    padding: '14px 16px',
     backgroundColor: '#ffffff',
     borderRadius: '14px',
-    border: 'none',
     boxShadow: '0 1px 3px rgba(0, 0, 0, 0.06)',
+    width: '100%',
+    boxSizing: 'border-box',
+  },
+  userTopRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '14px',
     cursor: 'pointer',
     textAlign: 'left',
-    transition: 'all 0.2s ease',
-    width: '100%',
+  },
+  pillRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '6px',
+    alignItems: 'center',
+    paddingLeft: '2px',
+  },
+  pill: {
+    padding: '4px 10px',
+    backgroundColor: 'var(--background-off-white)',
+    border: '1px solid #e2e8f0',
+    borderRadius: '14px',
+    cursor: 'pointer',
+    fontSize: '12px',
+    fontWeight: '500',
+    color: 'var(--text-muted)',
+    lineHeight: '1.4',
+  },
+  pillActive: {
+    backgroundColor: '#eff6ff',
+    border: '1px solid var(--primary-blue)',
+    color: 'var(--primary-blue)',
+  },
+  pillAll: {
+    backgroundColor: 'var(--primary-blue)',
+    border: '1px solid var(--primary-blue)',
+    color: '#ffffff',
+  },
+  pillDisabled: {
+    opacity: 0.4,
+    cursor: 'not-allowed',
+  },
+  pillNote: {
+    fontSize: '12px',
+    color: 'var(--text-light)',
+    fontStyle: 'italic',
+  },
+  pillPending: {
+    fontSize: '11px',
+    color: '#b45309',
+    fontWeight: '600',
   },
   userAvatar: {
     flexShrink: 0,
@@ -945,6 +1097,62 @@ const styles = {
     color: 'var(--text-light)',
     marginTop: '8px',
     lineHeight: '1.4',
+  },
+  allProductsRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: '10px',
+  },
+  allProductsLabel: {
+    fontSize: '14px',
+    fontWeight: '500',
+    color: 'var(--text-dark)',
+  },
+  toggle: {
+    width: '48px',
+    height: '28px',
+    borderRadius: '14px',
+    border: 'none',
+    cursor: 'pointer',
+    position: 'relative',
+    transition: 'background-color 0.2s ease',
+    padding: 0,
+    flexShrink: 0,
+  },
+  toggleKnob: {
+    width: '24px',
+    height: '24px',
+    borderRadius: '12px',
+    backgroundColor: '#ffffff',
+    position: 'absolute',
+    top: '2px',
+    left: '2px',
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.2)',
+    transition: 'transform 0.2s ease',
+  },
+  productChips: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '8px',
+  },
+  productChip: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '8px 12px',
+    backgroundColor: 'var(--background-off-white)',
+    border: '1px solid #e2e8f0',
+    borderRadius: '10px',
+    cursor: 'pointer',
+    color: 'var(--text-muted)',
+    fontSize: '14px',
+    fontWeight: '500',
+  },
+  productChipActive: {
+    backgroundColor: '#eff6ff',
+    border: '1px solid var(--primary-blue)',
+    color: 'var(--primary-blue)',
   },
   modalActions: {
     display: 'flex',

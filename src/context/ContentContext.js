@@ -73,6 +73,7 @@ export const ContentProvider = ({ children }) => {
   const [brochuresCategories, setBrochuresCategories] = useState([]);
   const [surgicalTechniquesCategories, setSurgicalTechniquesCategories] = useState([]);
   const [trainingCategories, setTrainingCategories] = useState([]);
+  const [videosCategories, setVideosCategories] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // User's downloaded content
@@ -89,7 +90,7 @@ export const ContentProvider = ({ children }) => {
   }, [initialLoaded]);
 
   // Computed loading - only true if actually loading AND no data yet
-  const isLoading = loading && brochuresCategories.length === 0 && surgicalTechniquesCategories.length === 0 && trainingCategories.length === 0;
+  const isLoading = loading && brochuresCategories.length === 0 && surgicalTechniquesCategories.length === 0 && trainingCategories.length === 0 && videosCategories.length === 0;
 
   // Load user downloads when user changes
   useEffect(() => {
@@ -110,7 +111,7 @@ export const ContentProvider = ({ children }) => {
       setLoading(true);
 
       // Load categories, items, and junction table in parallel
-      const [categoriesResult, itemsResult, junctionResult] = await Promise.all([
+      const [categoriesResult, itemsResult, junctionResult, contentProductsResult] = await Promise.all([
         supabase
           .from('content_categories')
           .select('*')
@@ -124,7 +125,10 @@ export const ContentProvider = ({ children }) => {
         supabase
           .from('content_item_categories')
           .select('*')
-          .order('sort_order', { ascending: true })
+          .order('sort_order', { ascending: true }),
+        supabase
+          .from('content_products')
+          .select('content_id, product_id')
       ]);
 
       if (categoriesResult.error) {
@@ -138,8 +142,19 @@ export const ContentProvider = ({ children }) => {
       }
 
       const categoriesData = categoriesResult.data;
-      const itemsData = itemsResult.data;
       const junctionData = junctionResult.data || [];
+
+      // Map each content item to its product line tags (2.0 filtering).
+      // Absence of tags = unscoped = visible to everyone (today's behavior).
+      const productsByContent = {};
+      (contentProductsResult.data || []).forEach(row => {
+        if (!productsByContent[row.content_id]) productsByContent[row.content_id] = [];
+        productsByContent[row.content_id].push(row.product_id);
+      });
+      const itemsData = (itemsResult.data || []).map(it => ({
+        ...it,
+        productIds: productsByContent[it.id] || [],
+      }));
 
       // Create a map of items by ID for quick lookup
       const itemsById = (itemsData || []).reduce((acc, item) => {
@@ -193,6 +208,7 @@ export const ContentProvider = ({ children }) => {
       const brochures = [];
       const surgicalTechniques = [];
       const training = [];
+      const videos = [];
 
       (categoriesData || []).forEach(category => {
         const categoryWithItems = {
@@ -206,12 +222,15 @@ export const ContentProvider = ({ children }) => {
           surgicalTechniques.push(categoryWithItems);
         } else if (category.type === 'training') {
           training.push(categoryWithItems);
+        } else if (category.type === 'videos') {
+          videos.push(categoryWithItems);
         }
       });
 
       setBrochuresCategories(brochures);
       setSurgicalTechniquesCategories(surgicalTechniques);
       setTrainingCategories(training);
+      setVideosCategories(videos);
       setInitialLoaded(true);
 
       // Sync any stale "processing" videos with Bunny's actual status
@@ -226,6 +245,7 @@ export const ContentProvider = ({ children }) => {
         setBrochuresCategories(applyUpdates);
         setSurgicalTechniquesCategories(applyUpdates);
         setTrainingCategories(applyUpdates);
+        setVideosCategories(applyUpdates);
       });
     } catch (err) {
       console.error('Error loading content:', err);
@@ -349,7 +369,7 @@ export const ContentProvider = ({ children }) => {
   const addCategory = async (type, title, description = '') => {
     try {
       // Get max sort order
-      const categories = type === 'brochures' ? brochuresCategories : type === 'training' ? trainingCategories : surgicalTechniquesCategories;
+      const categories = type === 'brochures' ? brochuresCategories : type === 'training' ? trainingCategories : type === 'videos' ? videosCategories : surgicalTechniquesCategories;
       const maxOrder = categories.length > 0
         ? Math.max(...categories.map(c => c.sort_order || 0))
         : -1;
@@ -373,6 +393,8 @@ export const ContentProvider = ({ children }) => {
         setBrochuresCategories(prev => [...prev, newCategory]);
       } else if (type === 'training') {
         setTrainingCategories(prev => [...prev, newCategory]);
+      } else if (type === 'videos') {
+        setVideosCategories(prev => [...prev, newCategory]);
       } else {
         setSurgicalTechniquesCategories(prev => [...prev, newCategory]);
       }
@@ -402,6 +424,7 @@ export const ContentProvider = ({ children }) => {
       setBrochuresCategories(updateState);
       setSurgicalTechniquesCategories(updateState);
       setTrainingCategories(updateState);
+      setVideosCategories(updateState);
     } catch (err) {
       console.error('Error updating category:', err);
       throw err;
@@ -422,6 +445,7 @@ export const ContentProvider = ({ children }) => {
       setBrochuresCategories(prev => prev.filter(c => c.id !== categoryId));
       setSurgicalTechniquesCategories(prev => prev.filter(c => c.id !== categoryId));
       setTrainingCategories(prev => prev.filter(c => c.id !== categoryId));
+      setVideosCategories(prev => prev.filter(c => c.id !== categoryId));
     } catch (err) {
       console.error('Error deleting category:', err);
       throw err;
@@ -444,6 +468,8 @@ export const ContentProvider = ({ children }) => {
         setBrochuresCategories(updateState);
       } else if (type === 'training') {
         setTrainingCategories(updateState);
+      } else if (type === 'videos') {
+        setVideosCategories(updateState);
       } else {
         setSurgicalTechniquesCategories(updateState);
       }
@@ -471,7 +497,7 @@ export const ContentProvider = ({ children }) => {
   const addContentItem = async (categoryId, itemData) => {
     try {
       // Get the category to determine type
-      const allCategories = [...brochuresCategories, ...surgicalTechniquesCategories, ...trainingCategories];
+      const allCategories = [...brochuresCategories, ...surgicalTechniquesCategories, ...trainingCategories, ...videosCategories];
       const category = allCategories.find(c => c.id === categoryId);
       if (!category) throw new Error('Category not found');
 
@@ -495,6 +521,7 @@ export const ContentProvider = ({ children }) => {
           quiz_link_label: itemData.quiz_link_label || null,
           is_downloadable: itemData.is_downloadable !== false,
           use_company_logo: itemData.use_company_logo || false,
+          hide_from_physician: itemData.hide_from_physician || false,
           bunny_video_id: itemData.bunny_video_id || null,
           bunny_video_status: itemData.bunny_video_status || null,
           sort_order: maxOrder + 1,
@@ -526,6 +553,8 @@ export const ContentProvider = ({ children }) => {
         setBrochuresCategories(updateState);
       } else if (category.type === 'training') {
         setTrainingCategories(updateState);
+      } else if (category.type === 'videos') {
+        setVideosCategories(updateState);
       } else {
         setSurgicalTechniquesCategories(updateState);
       }
@@ -548,7 +577,7 @@ export const ContentProvider = ({ children }) => {
         throw new Error('At least one category must be selected');
       }
 
-      const allCategories = [...brochuresCategories, ...surgicalTechniquesCategories, ...trainingCategories];
+      const allCategories = [...brochuresCategories, ...surgicalTechniquesCategories, ...trainingCategories, ...videosCategories];
 
       // Insert the content item (without category_id since it goes to multiple)
       const { data, error } = await supabase
@@ -566,6 +595,7 @@ export const ContentProvider = ({ children }) => {
           quiz_link_label: itemData.quiz_link_label || null,
           is_downloadable: itemData.is_downloadable !== false,
           use_company_logo: itemData.use_company_logo || false,
+          hide_from_physician: itemData.hide_from_physician || false,
           bunny_video_id: itemData.bunny_video_id || null,
           bunny_video_status: itemData.bunny_video_status || null,
           sort_order: 0,
@@ -617,6 +647,7 @@ export const ContentProvider = ({ children }) => {
       setBrochuresCategories(updateCategories);
       setSurgicalTechniquesCategories(updateCategories);
       setTrainingCategories(updateCategories);
+      setVideosCategories(updateCategories);
 
       return data;
     } catch (err) {
@@ -644,8 +675,33 @@ export const ContentProvider = ({ children }) => {
       setBrochuresCategories(updateState);
       setSurgicalTechniquesCategories(updateState);
       setTrainingCategories(updateState);
+      setVideosCategories(updateState);
     } catch (err) {
       console.error('Error updating content item:', err);
+      throw err;
+    }
+  };
+
+  // Set the product line tags for a content item (delete old, insert new).
+  const setContentProducts = async (itemId, productIds) => {
+    try {
+      await supabase.from('content_products').delete().eq('content_id', itemId);
+      if (productIds && productIds.length > 0) {
+        const rows = productIds.map(pid => ({ content_id: itemId, product_id: pid }));
+        const { error } = await supabase.from('content_products').insert(rows);
+        if (error) throw error;
+      }
+      // Update local state so filtering reflects the change immediately.
+      const updateState = (prev) => prev.map(c => ({
+        ...c,
+        items: c.items.map(i => i.id === itemId ? { ...i, productIds: productIds || [] } : i),
+      }));
+      setBrochuresCategories(updateState);
+      setSurgicalTechniquesCategories(updateState);
+      setTrainingCategories(updateState);
+      setVideosCategories(updateState);
+    } catch (err) {
+      console.error('Error setting content products:', err);
       throw err;
     }
   };
@@ -684,7 +740,7 @@ export const ContentProvider = ({ children }) => {
   const deleteContentItem = async (itemId) => {
     try {
       // Clean up Bunny video if one is attached
-      const allItems = [...brochuresCategories, ...surgicalTechniquesCategories, ...trainingCategories].flatMap(c => c.items);
+      const allItems = [...brochuresCategories, ...surgicalTechniquesCategories, ...trainingCategories, ...videosCategories].flatMap(c => c.items);
       const itemToDelete = allItems.find(i => i.id === itemId);
       if (itemToDelete?.bunny_video_id) {
         try {
@@ -710,6 +766,7 @@ export const ContentProvider = ({ children }) => {
       setBrochuresCategories(updateState);
       setSurgicalTechniquesCategories(updateState);
       setTrainingCategories(updateState);
+      setVideosCategories(updateState);
     } catch (err) {
       console.error('Error deleting content item:', err);
       throw err;
@@ -737,7 +794,7 @@ export const ContentProvider = ({ children }) => {
       // If not in any category anymore, delete the content item too
       if (!remaining || remaining.length === 0) {
         // Clean up Bunny video if one is attached
-        const allItems = [...brochuresCategories, ...surgicalTechniquesCategories, ...trainingCategories].flatMap(c => c.items);
+        const allItems = [...brochuresCategories, ...surgicalTechniquesCategories, ...trainingCategories, ...videosCategories].flatMap(c => c.items);
         const itemToDelete = allItems.find(i => i.id === itemId);
         if (itemToDelete?.bunny_video_id) {
           try {
@@ -764,6 +821,7 @@ export const ContentProvider = ({ children }) => {
       setBrochuresCategories(updateState);
       setSurgicalTechniquesCategories(updateState);
       setTrainingCategories(updateState);
+      setVideosCategories(updateState);
     } catch (err) {
       console.error('Error removing content from category:', err);
       throw err;
@@ -788,6 +846,7 @@ export const ContentProvider = ({ children }) => {
       setBrochuresCategories(updateState);
       setSurgicalTechniquesCategories(updateState);
       setTrainingCategories(updateState);
+      setVideosCategories(updateState);
 
       // Update in database (junction table for many-to-many relationships)
       const updates = orderedIds.map((id, index) => ({
@@ -813,7 +872,7 @@ export const ContentProvider = ({ children }) => {
   const getDownloadedItems = useCallback(() => {
     const allItems = [];
 
-    [...brochuresCategories, ...surgicalTechniquesCategories, ...trainingCategories].forEach(category => {
+    [...brochuresCategories, ...surgicalTechniquesCategories, ...trainingCategories, ...videosCategories].forEach(category => {
       category.items.forEach(item => {
         if (userDownloads.has(item.id)) {
           allItems.push({
@@ -826,7 +885,7 @@ export const ContentProvider = ({ children }) => {
     });
 
     return allItems;
-  }, [brochuresCategories, surgicalTechniquesCategories, trainingCategories, userDownloads]);
+  }, [brochuresCategories, surgicalTechniquesCategories, trainingCategories, videosCategories, userDownloads]);
 
   // Force refresh content (for pull-to-refresh, etc.)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -837,6 +896,7 @@ export const ContentProvider = ({ children }) => {
     brochuresCategories,
     surgicalTechniquesCategories,
     trainingCategories,
+    videosCategories,
     loading: isLoading, // Only true when actually loading with no data
     userDownloads,
 
@@ -861,6 +921,7 @@ export const ContentProvider = ({ children }) => {
     addContentToCategories,
     updateContentItem,
     updateContentCategories,
+    setContentProducts,
     deleteContentItem,
     removeContentFromCategory, // Remove from ONE category only
     reorderContentItems,

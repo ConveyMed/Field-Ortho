@@ -11,6 +11,7 @@ import { NotificationsProvider } from './context/NotificationsContext';
 import { OfflineProvider, useOffline } from './context/OfflineContext';
 import { ActivityNotificationsProvider } from './context/ActivityNotificationsContext';
 import { AppSettingsProvider } from './context/AppSettingsContext';
+import { ViewModeProvider } from './context/ViewModeContext';
 import {
   initializeOneSignalSDK,
   registerDeviceForUser,
@@ -35,6 +36,7 @@ import Resources from './pages/Resources';
 import ManageBrochures from './pages/ManageBrochures';
 import ManageSurgicalTechniques from './pages/ManageSurgicalTechniques';
 import ManageTraining from './pages/ManageTraining';
+import ManageVideos from './pages/ManageVideos';
 import ManageAI from './pages/ManageAI';
 import Downloads from './pages/Downloads';
 import FileViewer from './pages/FileViewer';
@@ -52,8 +54,9 @@ import { AIChatProvider } from './context/AIChatContext';
 import { AnalyticsProvider } from './context/AnalyticsContext';
 import { ChatProvider } from './context/ChatContext';
 import CreatePostModal from './components/CreatePostModal';
-import OrganizationGate from './pages/OrganizationGate';
+import RoleCodeGate from './pages/RoleCodeGate';
 import ManageOrgCode from './pages/ManageOrgCode';
+import ManageProducts from './pages/ManageProducts';
 import './App.css';
 
 // Routes that should NOT show bottom nav
@@ -319,6 +322,28 @@ function AppContent() {
     };
   }, [isAuthenticated, isProfileComplete, navigate]);
 
+  // 2.0.1 single-gate: apply the access code entered at the front gate.
+  // A new user signs up after the gate, so we stamp their org_role here from
+  // the remembered code (one entry, no second prompt). Existing users who
+  // already have a role are left untouched.
+  useEffect(() => {
+    if (!isAuthenticated || !isProfileComplete || !userProfile || isOffline) return;
+    if (userProfile.org_role) {
+      localStorage.removeItem('pending_org_code');
+      return;
+    }
+    const pending = localStorage.getItem('pending_org_code');
+    if (!pending) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.rpc('verify_org_code', { p_code: pending });
+      if (cancelled) return;
+      localStorage.removeItem('pending_org_code');
+      if (data?.success) await refreshProfile();
+    })();
+    return () => { cancelled = true; };
+  }, [isAuthenticated, isProfileComplete, userProfile, isOffline, refreshProfile]);
+
   // Determine if bottom nav should show
   const showBottomNav = isAuthenticated && isProfileComplete && !noNavRoutes.includes(location.pathname);
 
@@ -331,10 +356,12 @@ function AppContent() {
   const publicRoutes = ['/support', '/terms', '/privacy'];
   const isPublicRoute = publicRoutes.some(route => location.pathname === route);
 
-  // Show organization code gate before anything else (no auth required)
+  // 2.0.1 single front gate (before login/signup): the user enters their
+  // physician/sales access code once. The code is remembered on-device and
+  // applied to org_role at sign-up (see the assign effect above).
   if (!orgCodeVerified && !isPublicRoute) {
     return (
-      <OrganizationGate onVerified={() => {
+      <RoleCodeGate onVerified={() => {
         localStorage.setItem('org_code_verified', 'true');
         setOrgCodeVerified(true);
       }} />
@@ -498,6 +525,13 @@ function AppContent() {
                 ? <Navigate to="/profile-complete" replace />
                 : <AppShell showNav={showBottomNav}><ManageTraining /></AppShell>
           } />
+          <Route path="/manage-videos" element={
+            !isAuthenticated
+              ? <Navigate to="/" replace />
+              : !isProfileComplete
+                ? <Navigate to="/profile-complete" replace />
+                : <AppShell showNav={showBottomNav}><ManageVideos /></AppShell>
+          } />
           <Route path="/manage-brochures" element={
             !isAuthenticated
               ? <Navigate to="/" replace />
@@ -563,6 +597,15 @@ function AppContent() {
                   ? <Navigate to="/home" replace />
                   : <AppShell showNav={showBottomNav}><ManageOrgCode /></AppShell>
           } />
+          <Route path="/manage-products" element={
+            !isAuthenticated
+              ? <Navigate to="/" replace />
+              : !isProfileComplete
+                ? <Navigate to="/profile-complete" replace />
+                : !isAdmin
+                  ? <Navigate to="/home" replace />
+                  : <AppShell showNav={showBottomNav}><ManageProducts /></AppShell>
+          } />
           <Route path="/manage-analytics/*" element={
             !isAuthenticated
               ? <Navigate to="/" replace />
@@ -596,6 +639,7 @@ function App() {
   return (
     <Router>
       <AuthProvider>
+        <ViewModeProvider>
         <AppSettingsProvider>
           <OfflineProvider>
             <PostsProvider>
@@ -623,6 +667,7 @@ function App() {
             </PostsProvider>
           </OfflineProvider>
         </AppSettingsProvider>
+        </ViewModeProvider>
       </AuthProvider>
     </Router>
   );

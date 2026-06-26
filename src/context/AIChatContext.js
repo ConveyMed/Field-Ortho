@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { supabase } from '../config/supabase';
 import { useAuth } from './AuthContext';
+import { useViewMode } from './ViewModeContext';
 import { logAIQuery } from '../services/analytics';
 
 const AIChatContext = createContext();
@@ -22,9 +23,10 @@ const LOADING_STAGES = [
 
 export const AIChatProvider = ({ children }) => {
   const { user } = useAuth();
+  const { restrictByProduct, assignedProductIds, needsProductAssignment } = useViewMode();
   const [isOpen, setIsOpen] = useState(false);
   const [mode] = useState('gemini');
-  const [products, setProducts] = useState([]);
+  const [allProducts, setAllProducts] = useState([]); // raw product_docs rows {product_name, product_id}
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -68,19 +70,29 @@ export const AIChatProvider = ({ children }) => {
     const fetchProducts = async () => {
       const { data, error } = await supabase
         .from('product_docs')
-        .select('product_name, source_url')
+        .select('product_name, source_url, product_id')
         .order('product_name');
 
       if (error) {
         console.error('Failed to fetch products:', error);
       }
       if (data && !error) {
-        setProducts(data.map(p => p.product_name));
+        setAllProducts(data);
       }
     };
 
     fetchProducts();
   }, [user]);
+
+  // Sub-product selector list. Physicians/unrestricted see all; a sales user with
+  // assignments sees only sub-products of their product lines (plus unlinked docs).
+  const products = useMemo(() => {
+    if (needsProductAssignment) return [];
+    if (!restrictByProduct) return allProducts.map(p => p.product_name);
+    return allProducts
+      .filter(p => !p.product_id || assignedProductIds.includes(p.product_id))
+      .map(p => p.product_name);
+  }, [allProducts, restrictByProduct, assignedProductIds, needsProductAssignment]);
 
   // Fetch chat history
   const fetchHistory = useCallback(async () => {

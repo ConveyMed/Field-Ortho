@@ -254,8 +254,11 @@ export const DeleteAccount = () => {
     setError('');
 
     try {
-      const { error: rpcError } = await supabase.rpc('delete_user_account');
-      if (rpcError) throw rpcError;
+      // Self-delete: no userId → the edge function deletes the caller's own
+      // auth account + profile (service-role; an RPC can't remove auth.users).
+      const { data, error: fnError } = await supabase.functions.invoke('delete-user');
+      if (fnError) throw fnError;
+      if (data && data.success === false) throw new Error(data.error || 'Delete failed');
       await signOut();
     } catch (err) {
       console.error('Delete account error:', err);

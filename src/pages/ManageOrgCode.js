@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import { supabase } from '../config/supabase';
 
 const BackIcon = () => (
@@ -9,47 +8,98 @@ const BackIcon = () => (
   </svg>
 );
 
-const ManageOrgCode = () => {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const [orgCode, setOrgCode] = useState('');
-  const [lastChanged, setLastChanged] = useState(null);
+// The role codes entered at the single front gate. Each sets the new member's
+// org_role at sign-up via verify_org_code. Stored in the dedicated role_codes
+// table (the legacy 1.0 shared code lives in organization_code and is not
+// managed here, so it can never be disturbed).
+const ROLE_CARDS = [
+  { key: 'physician', role: 'physician', title: 'Physician Code', desc: 'Entered at the front gate to unlock the physician experience.', label: 'Physician' },
+  { key: 'sales', role: 'sales', title: 'Sales Team Code', desc: 'Entered at the front gate to unlock the full sales experience.', label: 'Sales Team' },
+];
+
+const CodeCard = ({ config, row, onSaved }) => {
   const [editing, setEditing] = useState(false);
   const [newCode, setNewCode] = useState('');
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetch = async () => {
-      const { data } = await supabase
-        .from('organization_code')
-        .select('*')
-        .limit(1)
-        .single();
-      if (data) {
-        setOrgCode(data.code);
-        setLastChanged(data.updated_at);
-      }
-      setLoading(false);
-    };
-    fetch();
-  }, []);
 
   const handleSave = async () => {
-    if (!newCode.trim()) return;
+    const code = newCode.trim();
+    if (!code) return;
     setSaving(true);
-    const { error } = await supabase
-      .from('organization_code')
-      .update({ code: newCode.trim(), updated_at: new Date().toISOString(), updated_by: user?.id })
-      .not('id', 'is', null);
-    if (!error) {
-      setOrgCode(newCode.trim());
-      setLastChanged(new Date().toISOString());
-      setEditing(false);
-      setNewCode('');
+    let error;
+    if (row?.id) {
+      ({ error } = await supabase
+        .from('role_codes')
+        .update({ code, label: config.label, updated_at: new Date().toISOString() })
+        .eq('id', row.id));
+    } else {
+      ({ error } = await supabase
+        .from('role_codes')
+        .insert({ code, role: config.role, label: config.label, is_active: true }));
     }
     setSaving(false);
+    if (!error) {
+      setEditing(false);
+      setNewCode('');
+      onSaved();
+    }
   };
+
+  return (
+    <div style={styles.card}>
+      <div style={styles.label}>{config.title}</div>
+      <p style={styles.cardDesc}>{config.desc}</p>
+      {!editing ? (
+        <>
+          <div style={styles.codeDisplay}>{row?.code || 'Not set'}</div>
+          <button style={styles.editButton} onClick={() => { setEditing(true); setNewCode(row?.code || ''); }}>
+            {row?.code ? 'Change Code' : 'Set Code'}
+          </button>
+        </>
+      ) : (
+        <>
+          <input
+            type="text"
+            value={newCode}
+            onChange={(e) => setNewCode(e.target.value)}
+            placeholder="Enter code"
+            autoFocus
+            style={styles.input}
+          />
+          <div style={styles.buttonRow}>
+            <button style={styles.cancelButton} onClick={() => { setEditing(false); setNewCode(''); }}>
+              Cancel
+            </button>
+            <button
+              style={{ ...styles.saveButton, opacity: saving || !newCode.trim() ? 0.6 : 1 }}
+              onClick={handleSave}
+              disabled={saving || !newCode.trim()}
+            >
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+const ManageOrgCode = () => {
+  const navigate = useNavigate();
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchCodes = async () => {
+    const { data } = await supabase.from('role_codes').select('*');
+    setRows(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchCodes();
+  }, []);
+
+  const rowFor = (role) => rows.find(r => r.role === role);
 
   return (
     <div style={styles.container}>
@@ -58,7 +108,7 @@ const ManageOrgCode = () => {
           <button style={styles.backButton} onClick={() => navigate('/profile')}>
             <BackIcon />
           </button>
-          <h1 style={styles.headerTitle}>Organization Code</h1>
+          <h1 style={styles.headerTitle}>Access Codes</h1>
           <div style={{ width: '24px' }} />
         </div>
         <div style={styles.headerBorder} />
@@ -71,48 +121,14 @@ const ManageOrgCode = () => {
           ) : (
             <>
               <p style={styles.description}>
-                This code is required for all users to access the app. Share it with your team members so they can log in.
+                These codes are entered at the front gate. The code a new member uses sets their role
+                (physician or sales) and what they can see in the app.
               </p>
-
-              <div style={styles.card}>
-                <div style={styles.label}>Current Code</div>
-                {!editing ? (
-                  <>
-                    <div style={styles.codeDisplay}>{orgCode || '---'}</div>
-                    {lastChanged && (
-                      <div style={styles.timestamp}>
-                        Last changed {new Date(lastChanged).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                      </div>
-                    )}
-                    <button style={styles.editButton} onClick={() => { setEditing(true); setNewCode(orgCode); }}>
-                      Change Code
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <input
-                      type="text"
-                      value={newCode}
-                      onChange={(e) => setNewCode(e.target.value)}
-                      placeholder="Enter new code"
-                      autoFocus
-                      style={styles.input}
-                    />
-                    <div style={styles.buttonRow}>
-                      <button style={styles.cancelButton} onClick={() => { setEditing(false); setNewCode(''); }}>
-                        Cancel
-                      </button>
-                      <button
-                        style={{ ...styles.saveButton, opacity: saving || !newCode.trim() ? 0.6 : 1 }}
-                        onClick={handleSave}
-                        disabled={saving || !newCode.trim()}
-                      >
-                        {saving ? 'Saving...' : 'Save'}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+              {ROLE_CARDS.map(cfg => (
+                <div key={cfg.key} style={{ marginBottom: '16px' }}>
+                  <CodeCard config={cfg} row={rowFor(cfg.role)} onSaved={fetchCodes} />
+                </div>
+              ))}
             </>
           )}
         </div>
@@ -192,21 +208,21 @@ const styles = {
     color: 'var(--text-muted, #64748b)',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
-    marginBottom: '12px',
+    marginBottom: '6px',
+  },
+  cardDesc: {
+    fontSize: '13px',
+    color: 'var(--text-light, #94a3b8)',
+    lineHeight: '1.5',
+    margin: '0 0 12px 0',
   },
   codeDisplay: {
-    fontSize: '32px',
+    fontSize: '28px',
     fontWeight: '700',
     color: 'var(--text-dark, #1e293b)',
     letterSpacing: '6px',
     textAlign: 'center',
-    padding: '20px 0',
-  },
-  timestamp: {
-    fontSize: '13px',
-    color: 'var(--text-light, #94a3b8)',
-    textAlign: 'center',
-    marginBottom: '20px',
+    padding: '16px 0 20px 0',
   },
   editButton: {
     width: '100%',
