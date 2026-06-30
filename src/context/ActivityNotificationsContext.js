@@ -3,6 +3,7 @@ import { useAuth } from './AuthContext';
 import { useViewMode } from './ViewModeContext';
 import { supabase } from '../config/supabase';
 import { logNotificationClick } from '../services/analytics';
+import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 
 const ActivityNotificationsContext = createContext({});
 
@@ -51,12 +52,14 @@ export const ActivityNotificationsProvider = ({ children }) => {
     }
   }, [user?.id]);
 
-  // Load all activity data
-  const loadActivityData = async () => {
+  // Load all activity data.
+  // `silent` skips the loading flag for background re-pulls (focus / realtime),
+  // so the bell + panel update in place with no spinner (stale-while-revalidate).
+  const loadActivityData = async ({ silent = false } = {}) => {
     if (!user?.id) return;
 
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
 
       // Load in parallel
       const [notificationsResult, stateResult, postReadsResult, notifReadsResult] = await Promise.all([
@@ -121,7 +124,9 @@ export const ActivityNotificationsProvider = ({ children }) => {
         });
 
         setNotifications(enrichedNotifications);
-      } else {
+      } else if (!notificationsResult.error) {
+        // Only clear on a confirmed-empty result. On a transient fetch error we
+        // keep the existing list so a background refresh never blanks the bell.
         setNotifications([]);
       }
 
@@ -161,9 +166,38 @@ export const ActivityNotificationsProvider = ({ children }) => {
     } catch (err) {
       console.error('Error loading activity data:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
+
+  // Keep the bell live without a re-login. loadActivityData only runs on user.id
+  // change, so on its own the bell goes stale the moment a teammate posts. These
+  // two layers fix that:
+  //
+  //   1. Focus/foreground/reconnect re-pull (the reliable layer). Fires when the
+  //      app returns to the foreground (iOS resume), the network reconnects, or
+  //      this provider mounts. This is what makes a new post show up after the
+  //      user backgrounds + reopens the app, which native sockets miss.
+  //   2. Realtime INSERT subscription (the live layer). Updates the bell while
+  //      the app is open and foregrounded, without waiting for a focus event.
+  //
+  // useRefreshOnFocus keeps the latest loadActivityData in a ref, so the empty
+  // dep array below is correct and never re-subscribes.
+  useRefreshOnFocus(() => { loadActivityData({ silent: true }); });
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel('activity_notifications_feed')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'activity_notifications' },
+        () => { loadActivityData({ silent: true }); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // Hide any post-related activity (new post, comment, like, reply) for posts this
   // user isn't allowed to see — by role + product group. Uses CURRENT view mode, so
