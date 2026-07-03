@@ -50,6 +50,7 @@ export const ActivityNotificationsProvider = ({ children }) => {
       setPostReads({});
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
   // Load all activity data.
@@ -506,6 +507,7 @@ export const ActivityNotificationsProvider = ({ children }) => {
     }
 
     return scrollTarget;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [markAsRead, closePanel, postReads, scrollTarget]);
 
   // Clear scroll target

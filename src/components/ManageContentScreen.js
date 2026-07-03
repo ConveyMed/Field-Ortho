@@ -1101,7 +1101,7 @@ const ManageContentScreen = ({ type, title, backPath }) => {
     addContentItem, addContentToCategories, updateContentItem, updateContentCategories, deleteContentItem,
     removeContentFromCategory,
     reorderCategories, reorderContentItems,
-    startBackgroundUpload, videoUploads,
+    startBackgroundUpload,
     setContentProducts,
   } = useContent();
 

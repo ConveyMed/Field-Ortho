@@ -76,7 +76,7 @@ const BottomNav = () => {
   const [chatEnabledByAdmin, setChatEnabledByAdmin] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
-  const { userProfile } = useAuth();
+  useAuth();
   const { openChat } = useAIChat();
   const { totalUnread: chatUnread } = useChat();
   const { settings } = useAppSettings();

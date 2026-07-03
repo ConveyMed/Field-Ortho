@@ -72,7 +72,7 @@ const MoreIcon = () => (
 
 const Chat = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  useAuth();
   const {
     chats,
     loading,
@@ -406,6 +406,7 @@ const NewChatModal = ({ onClose }) => {
 
   useEffect(() => {
     loadUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadUsers = async () => {
