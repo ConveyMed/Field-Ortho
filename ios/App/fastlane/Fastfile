@@ -53,7 +53,15 @@ platform :ios do
       configuration:    "Release",
       export_method:    "app-store",
       output_directory: "build",
-      clean:            true
+      clean:            true,
+      export_options: {
+        signingStyle: "manual",
+        teamID: "9B895DPQKP",
+        provisioningProfiles: {
+          "com.fieldortho.app" => "com.fieldortho.app AppStore",
+          "com.fieldortho.app.OneSignalNotificationServiceExtension" => "com.fieldortho.app.OneSignalNotificationServiceExtension AppStore"
+        }
+      }
     )
   end
 

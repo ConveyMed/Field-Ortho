@@ -42,3 +42,8 @@ recordings/
 V2_PHASED_PLAN.md
 V2_WALKTHROUGH.md
 V2_WALKTHROUGH.pdf
+*.cer
+*.mobileprovision
+*.p8
+*.jks
+AuthKey_*

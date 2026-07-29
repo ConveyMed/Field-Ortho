@@ -614,7 +614,7 @@ const styles = {
     justifyContent: 'center',
     gap: '10px',
     padding: '12px 16px 8px 16px',
-    maxWidth: '600px',
+    maxWidth: 'var(--content-max)',
     margin: '0 auto',
   },
   headerTitle: {
@@ -632,7 +632,7 @@ const styles = {
     borderRadius: '10px',
   },
   headerBorder: {
-    maxWidth: '600px',
+    maxWidth: 'var(--content-max)',
     margin: '0 auto 16px auto',
     height: '2px',
     backgroundColor: 'rgba(var(--primary-blue-rgb), 0.15)',
@@ -647,7 +647,7 @@ const styles = {
   },
   content: {
     width: '100%',
-    maxWidth: '600px',
+    maxWidth: 'var(--content-max)',
     padding: '16px',
   },
   searchWrapper: {
