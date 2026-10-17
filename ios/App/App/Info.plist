@@ -26,14 +26,33 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>This app needs access to your camera to take photos and videos for your profile and posts.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>This app needs access to your microphone to record video with audio.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app may use your location to provide relevant content and notifications.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app needs access to your microphone to record video with audio.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>This app saves photos to your library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs access to your photo library to select images for your profile and posts.</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+					<key>UISceneStoryboardFile</key>
+					<string>Main</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
