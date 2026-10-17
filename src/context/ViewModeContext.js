@@ -62,7 +62,10 @@ export const ViewModeProvider = ({ children }) => {
     setProductsLoaded(true);
   }, [user?.id]);
 
+  // A different signed-in user (or a fresh sign-up) must not see the previous
+  // "loaded" state while their own assignments are still on the way.
   useEffect(() => {
+    setProductsLoaded(false);
     refreshAssignedProducts();
   }, [refreshAssignedProducts]);
 
@@ -72,17 +75,26 @@ export const ViewModeProvider = ({ children }) => {
   // A representative with no products and no "all products" flag is waiting for an
   // admin to assign product lines. Admins bypass this (so they can still reach the
   // Manage tools and assign products); physicians are never product-scoped.
+  // A brand-new sign-up has no org_role for a moment, until their remembered
+  // access code is stamped. Treat them as a rep in waiting, not as a 1.0 user.
+  let awaitingRole = false;
+  try { awaitingRole = !orgRole && !!localStorage.getItem('pending_org_code'); } catch (e) { /* ignore */ }
   const needsProductAssignment =
-    isRep && !isAdmin && !seesAllProducts && productsLoaded && assignedProductIds.length === 0;
+    (isRep || awaitingRole) && !isAdmin && !seesAllProducts && productsLoaded && assignedProductIds.length === 0;
+
+  // Until the profile and assignments have loaded we do not know what this user
+  // may see, so show nothing rather than flash content they are not cleared for.
+  const accessReady = !!userProfile && productsLoaded;
 
   // Unscoped content (no product tags) is visible to everyone (today's behavior),
   // EXCEPT a rep still pending product assignment sees nothing (shows the pending state).
   const productAllowed = useCallback((itemProductIds) => {
+    if (!accessReady && !isAdmin && !seesAllProducts) return false;
     if (needsProductAssignment) return false;
     if (!restrictByProduct) return true;
     if (!itemProductIds || itemProductIds.length === 0) return true;
     return itemProductIds.some(id => assignedProductIds.includes(id));
-  }, [needsProductAssignment, restrictByProduct, assignedProductIds]);
+  }, [accessReady, isAdmin, seesAllProducts, needsProductAssignment, restrictByProduct, assignedProductIds]);
 
   // Resources topic gate: physician view hides Training.
   const topicAllowed = useCallback((topicType) => {

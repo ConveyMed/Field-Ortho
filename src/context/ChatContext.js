@@ -714,6 +714,14 @@ export const ChatProvider = ({ children }) => {
     }
   }, [user?.id]);
 
+  // The live handlers read the latest chats / open chat through refs, so the
+  // subscription is not torn down and re-fetched every time the chat list
+  // changes (that looped: fetchChats -> new chats -> effect -> fetchChats).
+  const chatsRef = useRef(chats);
+  const activeChatRef = useRef(activeChat);
+  chatsRef.current = chats;
+  activeChatRef.current = activeChat;
+
   // Set up real-time subscriptions
   useEffect(() => {
     if (!user?.id) return;
@@ -735,7 +743,7 @@ export const ChatProvider = ({ children }) => {
           const newMessage = payload.new;
 
           // Check if user is member of this chat
-          const isMyChat = chats.some(c => c.id === newMessage.chat_id);
+          const isMyChat = chatsRef.current.some(c => c.id === newMessage.chat_id);
 
           if (isMyChat) {
             // Fetch full message with sender info
@@ -755,7 +763,7 @@ export const ChatProvider = ({ children }) => {
 
             if (data) {
               // If it's the active chat, add to messages (avoid duplicates)
-              if (activeChat?.id === newMessage.chat_id) {
+              if (activeChatRef.current?.id === newMessage.chat_id) {
                 setMessages(prev => {
                   // Check if message already exists (from sendMessage)
                   if (prev.some(m => m.id === data.id)) return prev;
@@ -888,7 +896,7 @@ export const ChatProvider = ({ children }) => {
         supabase.removeChannel(channel);
       });
     };
-  }, [user?.id, fetchChats, activeChat?.id, chats]);
+  }, [user?.id, fetchChats]);
 
   // Fetch messages when active chat changes
   useEffect(() => {

@@ -338,8 +338,10 @@ function AppContent() {
     (async () => {
       const { data } = await supabase.rpc('verify_org_code', { p_code: pending });
       if (cancelled) return;
-      localStorage.removeItem('pending_org_code');
+      // Refresh first, then forget the code, so there is no moment where the
+      // user has neither a role nor a pending code (that briefly showed content).
       if (data?.success) await refreshProfile();
+      localStorage.removeItem('pending_org_code');
     })();
     return () => { cancelled = true; };
   }, [isAuthenticated, isProfileComplete, userProfile, isOffline, refreshProfile]);
@@ -359,7 +361,8 @@ function AppContent() {
   // 2.0.1 single front gate (before login/signup): the user enters their
   // physician/sales access code once. The code is remembered on-device and
   // applied to org_role at sign-up (see the assign effect above).
-  if (!orgCodeVerified && !isPublicRoute) {
+  // A signed-in user already got past the gate on this device; never ask again.
+  if (!orgCodeVerified && !isPublicRoute && !loading && !isAuthenticated) {
     return (
       <RoleCodeGate onVerified={() => {
         localStorage.setItem('org_code_verified', 'true');

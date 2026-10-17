@@ -1,3 +1,7 @@
+import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useViewMode } from '../context/ViewModeContext';
+
 // Inline empty-state shown on Home / Resources / Field AI when a representative
 // has signed in but an admin hasn't assigned their product groups yet. Mirrors
 // the look of the Downloads empty state (soft, in-app — not a full-screen block).
@@ -8,16 +12,36 @@ const ClockIcon = () => (
   </svg>
 );
 
-const PendingAssignmentNotice = ({ screen }) => (
-  <div style={styles.wrap}>
-    <div style={styles.icon}><ClockIcon /></div>
-    <h3 style={styles.title}>Pending group assignment</h3>
-    <p style={styles.text}>
-      Your account is ready{screen ? ` — ${screen} will fill in here` : ''}. An admin still needs to
-      assign your product groups. Once that's done, your content will appear automatically.
-    </p>
-  </div>
-);
+const PendingAssignmentNotice = ({ screen }) => {
+  const { refreshProfile } = useAuth();
+  const { refreshAssignedProducts } = useViewMode();
+  const [checking, setChecking] = useState(false);
+
+  // Re-pull the profile and product assignments so a user an admin just
+  // assigned gets in without closing and reopening the app.
+  const checkAgain = async () => {
+    setChecking(true);
+    try {
+      await Promise.all([refreshProfile?.(), refreshAssignedProducts?.()]);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  return (
+    <div style={styles.wrap}>
+      <div style={styles.icon}><ClockIcon /></div>
+      <h3 style={styles.title}>Pending group assignment</h3>
+      <p style={styles.text}>
+        Your account is ready{screen ? ` — ${screen} will fill in here` : ''}. An admin still needs to
+        assign your product groups. Once that's done, tap Refresh to see your content.
+      </p>
+      <button type="button" onClick={checkAgain} disabled={checking} style={styles.button}>
+        {checking ? 'Checking...' : 'Refresh'}
+      </button>
+    </div>
+  );
+};
 
 const styles = {
   wrap: {
@@ -46,6 +70,17 @@ const styles = {
     lineHeight: '1.5',
     maxWidth: '300px',
     margin: 0,
+  },
+  button: {
+    marginTop: '20px',
+    padding: '10px 28px',
+    border: 'none',
+    borderRadius: '10px',
+    background: 'var(--primary-blue, #1e40af)',
+    color: '#ffffff',
+    fontSize: '15px',
+    fontWeight: '600',
+    cursor: 'pointer',
   },
 };
 
