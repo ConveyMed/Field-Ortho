@@ -1,4 +1,5 @@
 import * as tus from 'tus-js-client';
+import { supabase } from '../config/supabase';
 
 // Always target the canonical site's function host (REACT_APP_SITE_URL), on web
 // and native alike. This keeps preview/staging deploys (whose own Netlify site
@@ -7,10 +8,17 @@ import * as tus from 'tus-js-client';
 // the same origin, so behavior is unchanged.
 const FUNCTIONS_BASE = `${process.env.REACT_APP_SITE_URL || window.location.origin}/.netlify/functions/bunny-video`;
 
+// The function checks the caller's Supabase session (create/delete are admin-only).
+async function authHeaders() {
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export async function createBunnyVideo(title) {
   const res = await fetch(`${FUNCTIONS_BASE}?action=create`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify({ title }),
   });
 
@@ -53,7 +61,9 @@ export function uploadBunnyVideo(file, tusConfig, onProgress, onComplete, onErro
 }
 
 export async function getBunnyVideoStatus(videoId) {
-  const res = await fetch(`${FUNCTIONS_BASE}?action=status&videoId=${videoId}`);
+  const res = await fetch(`${FUNCTIONS_BASE}?action=status&videoId=${videoId}`, {
+    headers: await authHeaders(),
+  });
 
   if (!res.ok) {
     throw new Error('Failed to get video status');
@@ -65,6 +75,7 @@ export async function getBunnyVideoStatus(videoId) {
 export async function deleteBunnyVideo(videoId) {
   const res = await fetch(`${FUNCTIONS_BASE}?action=delete&videoId=${videoId}`, {
     method: 'DELETE',
+    headers: await authHeaders(),
   });
 
   if (!res.ok) {
@@ -75,7 +86,9 @@ export async function deleteBunnyVideo(videoId) {
 }
 
 export async function getSecureEmbedUrl(videoId) {
-  const res = await fetch(`${FUNCTIONS_BASE}?action=embed-token&videoId=${videoId}`);
+  const res = await fetch(`${FUNCTIONS_BASE}?action=embed-token&videoId=${videoId}`, {
+    headers: await authHeaders(),
+  });
 
   if (!res.ok) {
     throw new Error('Failed to get embed URL');

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getCaller } from "../_auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -111,9 +112,6 @@ serve(async (req) => {
   }
 
   try {
-    const { product, question, conversationHistory = [] } = await req.json();
-    console.log("ai-chat request received, history length:", conversationHistory.length);
-
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -128,6 +126,18 @@ serve(async (req) => {
 
     // Create Supabase client
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+    // Signed-in app users only; every call spends Gemini credit.
+    const caller = await getCaller(req, supabase);
+    if (!caller) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Not authenticated" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { product, question, conversationHistory = [] } = await req.json();
+    console.log("ai-chat request received, history length:", conversationHistory.length);
 
     // Fetch product document
     console.log("Fetching product doc");

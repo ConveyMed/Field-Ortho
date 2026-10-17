@@ -8,7 +8,7 @@ export const APPS = {
     supabaseUrl: process.env.REACT_APP_SUPABASE_URL
       || 'https://whwpkcdpahhaxexxmbwq.supabase.co',
     supabaseKey: process.env.REACT_APP_SUPABASE_ANON_KEY
-      || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indod3BrY2RwYWhoYXhleHhtYndxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MTg5NzMsImV4cCI6MjA4OTI5NDk3M30.0iEtHH8ONbKESACh4lqEyymowl8xIO1jhtQqSgKmaw0',
+      || 'sb_publishable_6TauZJSXsvIDjLt3XslCgQ_VX-56QxY',
   },
 }
 

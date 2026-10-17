@@ -1,9 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { safeEqual } from "../_auth.ts";
+
+// Server-to-server only. Nothing in the app, the database, or a cron calls this
+// today (checked 10.16.2026). A future caller (DB webhook, cron, another
+// function) must send the x-dispatcher-secret header matching the
+// DISPATCHER_SECRET function secret. No secret set = every call is refused.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-dispatcher-secret",
 };
 
 // Notification event types
@@ -65,6 +71,14 @@ serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  const expected = Deno.env.get("DISPATCHER_SECRET") || "";
+  if (!safeEqual(req.headers.get("x-dispatcher-secret") || "", expected)) {
+    return new Response(
+      JSON.stringify({ success: false, error: "Not authorized" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   try {

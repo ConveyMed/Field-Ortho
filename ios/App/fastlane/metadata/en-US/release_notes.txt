@@ -1,7 +1,3 @@
-FieldOrtho 2.0 is a major update.
-
-New role-based experience that shows you the product lines and content relevant to you.
-Posts now update reliably as you move through the app.
-Streamlined, distraction-free feed.
-Account management improvements, including account deletion.
-Performance and stability fixes.
+Responsive layout improvements for iPad and larger displays, including full-size Sales Tools previews.
+The activity area now hides itself when there is nothing new to show.
+Security and stability updates.

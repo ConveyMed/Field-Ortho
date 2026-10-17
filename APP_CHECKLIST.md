@@ -40,9 +40,9 @@
 | GitHub repo (ConveyMed org) | https://github.com/ConveyMed/Field-Ortho | done |
 | Chase added as collaborator | | needs confirm |
 | Netlify site created & linked to repo | | waiting on Mike |
-| Bunny API Key | 75e20c73-e9f5-4897-8610fc36e07a-1653-471b | done |
+| Bunny API Key | (removed 10.16.2026: never store secrets here; see 1Password / provider dashboard) | done |
 | Bunny Library ID | 619203 | done |
-| Bunny Token Auth Key | c63490ca-e9a7-462d-ba2f-35f1b0ebff65 | done |
+| Bunny Token Auth Key | (removed 10.16.2026: never store secrets here; see 1Password / provider dashboard) | done |
 | Bunny CDN Host | vz-8f0f04c7-755.b-cdn.net | done |
 
 ### Service Keys (Chase creates)
@@ -51,9 +51,9 @@
 | Supabase | Project Ref | whwpkcdpahhaxexxmbwq | done |
 | Supabase | URL | https://whwpkcdpahhaxexxmbwq.supabase.co | done |
 | Supabase | Anon Key | eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indod3BrY2RwYWhoYXhleHhtYndxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MTg5NzMsImV4cCI6MjA4OTI5NDk3M30.0iEtHH8ONbKESACh4lqEyymowl8xIO1jhtQqSgKmaw0 | done |
-| Supabase | Service Role Key | eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indod3BrY2RwYWhoYXhleHhtYndxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzcxODk3MywiZXhwIjoyMDg5Mjk0OTczfQ.rVZv067pAHD6nla99_SYLBClC03Od-2v6Tg27ADGJk4 | done |
+| Supabase | Service Role Key | (removed 10.16.2026: never store secrets here; see 1Password / provider dashboard) | done |
 | OneSignal | App ID | 7a40ef60-32f6-4b18-b8e4-abfe88467f44 | done |
-| OneSignal | REST API Key | os_v2_app_pjao6ybs6zfrrohevp7iqrt7iqtcjfxcljle4m55otl4z6oi3vbdfxjpo627pzadx4vhn6a3kfhf2q7ucfhulrpgdw6ajjeh6fz3vxa | done |
+| OneSignal | REST API Key | (removed 10.16.2026: never store secrets here; see 1Password / provider dashboard)_pjao6ybs6zfrrohevp7iqrt7iqtcjfxcljle4m55otl4z6oi3vbdfxjpo627pzadx4vhn6a3kfhf2q7ucfhulrpgdw6ajjeh6fz3vxa | done |
 | OneSignal | p8 file | ~/Apps/DemoTemplate/AuthKey_46WR2KRB9F.p8 | done |
 | Gemini | API Key | | use shared |
 | Netlify | Site Name | | waiting on Mike |
@@ -123,8 +123,8 @@
 ### Test Accounts
 | Account | Email | Password | Purpose |
 |---------|-------|----------|---------|
-| Chase (dev/admin) | TheK2way17@gmail.com | Pri123456! | Development & testing |
-| Apple Review | Test@email.com | AppleTest | Required for App Store review |
+| Chase (dev/admin) | TheK2way17@gmail.com | (removed, see 1Password) | Development & testing |
+| Apple Review | Test@email.com | (removed, see 1Password) | Required for App Store review |
 | Client test | | | For client beta testing |
 
 ### Netlify Setup
@@ -169,7 +169,7 @@
 
 ### Android - Gradle
 - [x] Fix MainActivity.java package path
-- [x] Generate upload keystore (fieldortho-upload-key.jks, password: fieldortho2026)
+- [x] Generate upload keystore (fieldortho-upload-key.jks, password: (removed 10.16.2026: never store secrets here; see 1Password / provider dashboard))
 - [x] Configure signing in build.gradle
 - [x] Add *.jks to .gitignore
 - [x] Fix Gradle/AGP versions (AGP 8.9.1, Gradle 8.11.1, SDK 36)
@@ -182,7 +182,7 @@
 |--------|----------|
 | Keystore | `android/fieldortho-upload-key.jks` |
 | Keystore Alias | `upload` |
-| Keystore Password | `fieldortho2026` |
+| Keystore Password | (removed 10.16.2026: never store secrets here; see 1Password / provider dashboard) |
 | AAB File | `android/app/build/outputs/bundle/release/app-release.aab` |
 | TestFlight Build | |
 | Google Play Internal | |

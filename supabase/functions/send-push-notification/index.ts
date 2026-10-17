@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getCaller } from "../_auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,6 +40,11 @@ interface PushNotificationRequest {
   data?: Record<string, string>;
 }
 
+// Broadcasts only staff can trigger in the app (notifications table INSERT is
+// admin/owner-only). Every other type is sent by ordinary users: posts, likes,
+// comments, chats, RSVPs, new-user-joined.
+const ADMIN_ONLY_TYPES = new Set(['new_update', 'new_event', 'event_reminder']);
+
 // Map notification types to preference column names
 const preferenceMap: Record<string, string> = {
   'new_post': 'push_new_posts',
@@ -62,9 +68,6 @@ serve(async (req) => {
   }
 
   try {
-    const payload: PushNotificationRequest = await req.json();
-    console.log("Push notification request, type:", payload.notification_type);
-
     const ONESIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID");
     const ONESIGNAL_REST_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -78,6 +81,25 @@ serve(async (req) => {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+    // Signed-in app user, or a server caller holding the service key.
+    const caller = await getCaller(req, supabase);
+    if (!caller) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Not authenticated" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const payload: PushNotificationRequest = await req.json();
+    console.log("Push notification request, type:", payload.notification_type);
+
+    if (caller.kind === "user" && !caller.isAdmin && ADMIN_ONLY_TYPES.has(payload.notification_type)) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Admin access required" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // ---- Resolve the targeting fields for the OneSignal notification ----
     // Preferred path: target by external_id (= app user id). The app calls

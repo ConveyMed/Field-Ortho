@@ -10,13 +10,56 @@ const headers = {
   'AccessKey': BUNNY_API_KEY,
 };
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type',
+// Public project values (the same ones the app ships with); env overrides.
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://whwpkcdpahhaxexxmbwq.supabase.co';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY
+  || 'sb_publishable_6TauZJSXsvIDjLt3XslCgQ_VX-56QxY';
+
+// The app's real origins: iOS shell, Android shell (androidScheme https),
+// the live site, its deploy previews, and local dev.
+const ALLOWED_ORIGINS = [
+  'capacitor://localhost',
+  'https://localhost',
+  'https://fieldortho.netlify.app',
+  'http://localhost:3000',
+];
+const PREVIEW_ORIGIN = /^https:\/\/[a-z0-9-]+--fieldortho\.netlify\.app$/;
+
+let corsHeaders = {};
+const corsFor = (origin) => ({
+  ...(origin && (ALLOWED_ORIGINS.includes(origin) || PREVIEW_ORIGIN.test(origin))
+    ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' }
+    : {}),
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-};
+});
+
+// Who is calling: verifies the Supabase session token, then reads the
+// caller's own users row (RLS lets a signed-in user read users).
+async function getCaller(event) {
+  const auth = event.headers?.authorization || event.headers?.Authorization || '';
+  const token = auth.replace(/^Bearer\s+/i, '').trim();
+  if (!token) return null;
+
+  const meRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY },
+  });
+  if (!meRes.ok) return null;
+  const me = await meRes.json();
+  if (!me?.id) return null;
+
+  const rowRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/users?id=eq.${encodeURIComponent(me.id)}&select=is_admin,is_owner`,
+    { headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY } },
+  );
+  const rows = rowRes.ok ? await rowRes.json() : [];
+  const row = Array.isArray(rows) ? rows[0] : null;
+  return { id: me.id, isAdmin: !!(row?.is_admin || row?.is_owner) };
+}
 
 exports.handler = async (event) => {
+  corsHeaders = corsFor(event.headers?.origin || event.headers?.Origin);
+
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers: corsHeaders, body: '' };
   }
@@ -24,6 +67,15 @@ exports.handler = async (event) => {
   const action = event.queryStringParameters?.action;
 
   try {
+    // Creating and deleting library videos is admin work (content_items
+    // writes are admin/owner-only too). status and embed-token stay open for
+    // now because the store build 2.0.6 calls them with no token; see FO-28.
+    if (action === 'create' || action === 'delete') {
+      const caller = await getCaller(event);
+      if (!caller) return respond(401, { error: 'Not authenticated' });
+      if (!caller.isAdmin) return respond(403, { error: 'Admin access required' });
+    }
+
     switch (action) {
       case 'create':
         return await createVideo(event);

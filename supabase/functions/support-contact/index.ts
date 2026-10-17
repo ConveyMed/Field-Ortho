@@ -12,11 +12,24 @@ serve(async (req) => {
   }
 
   try {
+    // Public on purpose: the /support page is the store listing's support URL
+    // and works signed out. So the input is bounded and the alert goes to
+    // admins only, never to every user.
     const { name, email, subject, message, app_name } = await req.json();
 
     if (!name || !email || !message) {
       return new Response(
         JSON.stringify({ error: "Name, email, and message are required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const tooLong =
+      [name, email, subject || "", app_name || ""].some((v) => typeof v !== "string" || v.length > 200) ||
+      typeof message !== "string" || message.length > 5000;
+    if (tooLong || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid name, email, or message" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -47,25 +60,35 @@ serve(async (req) => {
       console.error("Insert failed:", await insertRes.text());
     }
 
-    // Notify admins via OneSignal push
+    // Notify admins via OneSignal push (by external_id = app user id, same
+    // delivery path as send-push-notification).
     const onesignalAppId = Deno.env.get("ONESIGNAL_APP_ID");
     const onesignalKey = Deno.env.get("ONESIGNAL_REST_API_KEY");
 
-    if (onesignalAppId && onesignalKey) {
-      await fetch("https://api.onesignal.com/notifications", {
+    const adminsRes = await fetch(
+      `${supabaseUrl}/rest/v1/users?or=(is_admin.eq.true,is_owner.eq.true)&select=id`,
+      { headers: { "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` } },
+    );
+    const admins = adminsRes.ok ? await adminsRes.json() : [];
+    const adminIds = Array.isArray(admins) ? admins.map((a: { id: string }) => a.id) : [];
+
+    if (onesignalAppId && onesignalKey && adminIds.length > 0) {
+      const pushRes = await fetch("https://onesignal.com/api/v1/notifications", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Key ${onesignalKey}`,
+          "Authorization": `Basic ${onesignalKey}`,
         },
         body: JSON.stringify({
           app_id: onesignalAppId,
-          included_segments: ["All"],
+          include_external_user_ids: adminIds,
+          channel_for_external_user_ids: "push",
           headings: { en: `Support: ${appLabel}` },
           contents: { en: `${name}: ${message.substring(0, 100)}` },
           data: { type: "support_request" },
         }),
       });
+      if (!pushRes.ok) console.error("Admin push failed:", pushRes.status, await pushRes.text());
     }
 
     return new Response(
