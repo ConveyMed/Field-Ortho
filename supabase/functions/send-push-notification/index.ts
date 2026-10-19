@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getCaller } from "../_auth.ts";
+import { getCaller, developerIds } from "../_auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -141,6 +141,14 @@ serve(async (req) => {
     } else if (payload.player_ids && payload.player_ids.length > 0) {
       // Legacy fallback: raw subscription IDs.
       subscriptionIds = [...new Set(payload.player_ids)];
+    }
+
+    // App developer testing never notifies the client: a developer's pushes
+    // only reach other developer accounts (usually themselves).
+    if (caller.kind === "user" && caller.isDeveloper) {
+      const devs = await developerIds(supabase);
+      externalIds = externalIds.filter(id => devs.has(id));
+      subscriptionIds = [];
     }
 
     if (externalIds.length === 0 && subscriptionIds.length === 0) {

@@ -60,6 +60,29 @@ serve(async (req) => {
       console.error("Insert failed:", await insertRes.text());
     }
 
+    // App developer testing never alerts the client's admins. A developer is
+    // recognised by their signed-in session or by the email they typed.
+    const devRes = await fetch(
+      `${supabaseUrl}/rest/v1/users?is_developer=eq.true&select=id,email`,
+      { headers: { "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` } },
+    );
+    const devs: { id: string; email: string | null }[] = devRes.ok ? await devRes.json() : [];
+    let fromDeveloper = devs.some((d) => (d.email || "").toLowerCase() === email.toLowerCase());
+    const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+    if (!fromDeveloper && devs.length > 0 && token && token !== supabaseKey) {
+      const meRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+        headers: { "apikey": supabaseKey, "Authorization": `Bearer ${token}` },
+      });
+      const me = meRes.ok ? await meRes.json() : null;
+      fromDeveloper = !!me?.id && devs.some((d) => d.id === me.id);
+    }
+    if (fromDeveloper) {
+      return new Response(
+        JSON.stringify({ success: true }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Notify admins via OneSignal push (by external_id = app user id, same
     // delivery path as send-push-notification).
     const onesignalAppId = Deno.env.get("ONESIGNAL_APP_ID");

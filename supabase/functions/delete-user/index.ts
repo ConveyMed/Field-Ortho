@@ -67,6 +67,16 @@ serve(async (req) => {
       "Content-Type": "application/json",
     };
 
+    // The app developer account is undeletable (the database refuses it too);
+    // say so cleanly instead of failing halfway through.
+    const devRes = await fetch(
+      `${supabaseUrl}/rest/v1/users?id=eq.${encodeURIComponent(targetId)}&is_developer=eq.true&select=id`,
+      { headers: svc },
+    );
+    const devRows = devRes.ok ? await devRes.json() : null;
+    if (!Array.isArray(devRows)) return json(500, { error: "Failed to check account" });
+    if (devRows.length > 0) return json(403, { error: "This account cannot be deleted" });
+
     // 3. Clear the one NO-ACTION reference (nullable) so the profile delete
     //    can't be blocked by it. No-op today (chat unused) but future-proof.
     await fetch(`${supabaseUrl}/rest/v1/chat_members?added_by=eq.${targetId}`, {

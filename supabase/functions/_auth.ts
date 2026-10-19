@@ -4,7 +4,7 @@
 import { createClient, SupabaseClient, User } from "https://esm.sh/@supabase/supabase-js@2";
 
 export type Caller =
-  | { kind: "user"; user: User; isAdmin: boolean }
+  | { kind: "user"; user: User; isAdmin: boolean; isDeveloper: boolean }
   | { kind: "service" };
 
 const bearer = (req: Request) =>
@@ -36,11 +36,16 @@ export async function getCaller(req: Request, admin: SupabaseClient<any, any, an
 
   const { data: row } = await admin
     .from("users")
-    .select("is_admin, is_owner")
+    .select("is_admin, is_owner, is_developer")
     .eq("id", data.user.id)
     .maybeSingle();
 
-  return { kind: "user", user: data.user, isAdmin: !!(row?.is_admin || row?.is_owner) };
+  return {
+    kind: "user",
+    user: data.user,
+    isAdmin: !!(row?.is_admin || row?.is_owner),
+    isDeveloper: !!row?.is_developer,
+  };
 }
 
 function safeJson(s: string): Record<string, string> {
@@ -50,6 +55,15 @@ function safeJson(s: string): Record<string, string> {
   } catch {
     return {};
   }
+}
+
+// App developer accounts (users.is_developer). Their activity must never
+// notify anyone else, so senders use this to cut recipients down to developers.
+// deno-lint-ignore no-explicit-any
+export async function developerIds(admin: SupabaseClient<any, any, any>): Promise<Set<string>> {
+  const { data, error } = await admin.from("users").select("id").eq("is_developer", true);
+  if (error) throw new Error("Failed to load developer accounts");
+  return new Set((data || []).map((u: { id: string }) => u.id));
 }
 
 export const adminClient = () =>
