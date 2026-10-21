@@ -1,3 +1,5 @@
-Responsive layout improvements for iPad and larger displays, including full-size Sales Tools previews.
-The activity area now hides itself when there is nothing new to show.
-Security and stability updates.
+Your app now opens with its own logo.
+The notification bell only lights up for new items, and clears when you read them.
+The access code is asked once per device.
+Delete Account now works from Settings.
+Faster chat, sign-in fixes and security updates.
