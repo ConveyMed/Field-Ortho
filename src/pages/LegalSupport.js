@@ -257,7 +257,15 @@ export const DeleteAccount = () => {
       // Self-delete: no userId → the edge function deletes the caller's own
       // auth account + profile (service-role; an RPC can't remove auth.users).
       const { data, error: fnError } = await supabase.functions.invoke('delete-user');
-      if (fnError) throw fnError;
+      if (fnError) {
+        // 403 = an account the server will not delete (the app developer account).
+        if (fnError.context?.status === 403) {
+          setError('This account cannot be deleted.');
+          setLoading(false);
+          return;
+        }
+        throw fnError;
+      }
       if (data && data.success === false) throw new Error(data.error || 'Delete failed');
       await signOut();
     } catch (err) {

@@ -139,6 +139,7 @@ export const NotificationPanel = ({ onNavigate }) => {
     closePanel,
     getGroupedNotifications,
     markAllAsRead,
+    markAsRead,
     navigateToNotification,
   } = useActivityNotifications();
 
@@ -274,7 +275,11 @@ export const NotificationPanel = ({ onNavigate }) => {
                           ...styles.notificationItem,
                           ...(!hasUnreadComment ? styles.notificationItemRead : {}),
                         }}
-                        onClick={() => handleItemClick(data.comments[0])}
+                        onClick={() => {
+                          // One row stands for every comment in the group; read them all.
+                          data.comments.slice(1).forEach(c => markAsRead(c.id));
+                          handleItemClick(data.comments[0]);
+                        }}
                       >
                         <div style={styles.itemAvatar}>
                           {data.latestActor?.profile_image_url ? (

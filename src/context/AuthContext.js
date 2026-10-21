@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { supabase } from '../config/supabase';
 import { get, set, del } from 'idb-keyval';
 import { logoutOneSignal } from '../services/onesignal';
+import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 // Note: OneSignal initialization is now handled by dedicated components in App.js
 
 const AuthContext = createContext({});
@@ -9,6 +10,14 @@ const AuthContext = createContext({});
 // Keys for cached auth data
 const CACHED_USER_KEY = 'cached_auth_user';
 const CACHED_PROFILE_KEY = 'cached_auth_profile';
+
+// Auth error codes that mean the login itself is gone on the server (account
+// deleted, or the session revoked). Network errors, 5xx and an expired token
+// (bad_jwt, e.g. a wrong device clock) never count.
+const GONE_AUTH_CODES = ['user_not_found', 'session_not_found'];
+const isLoginGone = (error) =>
+  GONE_AUTH_CODES.includes(error?.code)
+  || (!error?.code && [401, 403, 404].includes(error?.status));
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -24,6 +33,63 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
   const profileFetchRef = useRef(null);
+
+  // Local sign-out for a login that no longer exists on the server. Clears the
+  // cached user and profile so nothing stale survives a relaunch.
+  const signOutGoneAccount = async () => {
+    console.log('Account no longer exists; signing out');
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch (e) {
+      console.log('Local sign-out error:', e);
+    }
+    try {
+      await del(CACHED_USER_KEY);
+      await del(CACHED_PROFILE_KEY);
+    } catch (e) {
+      console.log('Error clearing cached auth:', e);
+    }
+    setUser(null);
+    setUserProfile(null);
+    setLoading(false);
+  };
+
+  // Fresh server check that this login and its users row still exist.
+  // Returns false (after signing out) only on a definite "gone"; any doubt
+  // (offline, network error, server error) keeps the user signed in.
+  // A new sign-up always has its users row: handle_new_user inserts it in the
+  // same transaction that creates the auth user.
+  const checkAccount = async () => {
+    if (!user?.id || !navigator.onLine) return true;
+    try {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) {
+        if (isLoginGone(error)) {
+          await signOutGoneAccount();
+          return false;
+        }
+        return true;
+      }
+      if (!data?.user) return true;
+
+      const { data: row, error: rowError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', data.user.id)
+        .maybeSingle();
+      if (!rowError && !row) {
+        await signOutGoneAccount();
+        return false;
+      }
+    } catch (err) {
+      console.log('Account check error:', err);
+    }
+    return true;
+  };
+
+  // Re-check when the app returns to the foreground or reconnects, so an
+  // account deleted while the app was open signs out on next use.
+  useRefreshOnFocus(() => { if (user?.id) checkAccount(); });
 
   // Fetch profile when user changes
   useEffect(() => {
@@ -71,11 +137,18 @@ export const AuthProvider = ({ children }) => {
           .from('users')
           .select('*')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
 
         if (fetchState.cancelled) return;
 
-        if (error) {
+        // No users row: confirm with the auth server before acting, then sign
+        // out if the account is gone. Unconfirmed falls back to the cache below.
+        if (!error && !profile) {
+          const stillThere = await checkAccount();
+          if (fetchState.cancelled || !stillThere) return;
+        }
+
+        if (error || !profile) {
           console.log('Profile fetch error:', error);
           // Try cached profile on error
           const cachedProfile = await get(CACHED_PROFILE_KEY);
@@ -116,6 +189,8 @@ export const AuthProvider = ({ children }) => {
         profileFetchRef.current.cancelled = true;
       }
     };
+    // checkAccount reads the same user; re-running on its identity would refetch for nothing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, authChecked]);
 
   // Main auth effect
@@ -239,8 +314,7 @@ export const AuthProvider = ({ children }) => {
     } catch (e) {
       console.log('Error clearing cached auth:', e);
     }
-    // Clear org code verification
-    localStorage.setItem('org_code_verified', 'false');
+    // The access code pass is per device and survives sign-out (see accessCodeFlag).
     setUser(null);
     setUserProfile(null);
   };
@@ -273,6 +347,8 @@ export const AuthProvider = ({ children }) => {
     user,
     userProfile,
     loading,
+    authChecked,
+    checkAccount,
     refreshProfile,
     signOut,
     resetIntake,

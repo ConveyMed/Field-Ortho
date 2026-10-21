@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../config/supabase';
 import { notifyNewUserJoined } from '../services/notifications';
+import { useAuth } from '../context/AuthContext';
 import './onboarding.css';
 
 function ProfileComplete({ onComplete }) {
+  const { checkAccount } = useAuth();
   const [user, setUser] = useState(null);
   const [step, setStep] = useState('welcome');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -218,12 +220,18 @@ function ProfileComplete({ onComplete }) {
         updateData.profile_image_url = imageUrl;
       }
 
-      const { error } = await supabase
+      const { data: savedRows, error } = await supabase
         .from('users')
         .update(updateData)
-        .eq('id', user.id);
+        .eq('id', user.id)
+        .select('id');
 
       if (error) throw error;
+      // RLS can match zero rows without an error; that is not a save.
+      if (!savedRows || savedRows.length === 0) {
+        checkAccount();
+        throw new Error('Your profile could not be found. Please sign in again.');
+      }
 
       // Notify admins about new user
       notifyNewUserJoined({

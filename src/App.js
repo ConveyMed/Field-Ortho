@@ -18,6 +18,7 @@ import {
   checkAndRequestPermission
 } from './services/onesignal';
 import { supabase } from './config/supabase';
+import { loadAccessCodePassed, saveAccessCodePassed } from './utils/accessCodeFlag';
 import Login from './onboarding/Login';
 import SignUp from './onboarding/SignUp';
 import EmailConfirmation from './onboarding/EmailConfirmation';
@@ -160,15 +161,30 @@ const AppShell = ({ children, showNav = false }) => {
 const offlineAllowedRoutes = ['/downloads', '/view-file'];
 
 function AppContent() {
-  const { loading, isAuthenticated, isProfileComplete, userProfile, refreshProfile } = useAuth();
+  const { loading, authChecked, isAuthenticated, isProfileComplete, userProfile, refreshProfile } = useAuth();
   const isAdmin = userProfile?.is_admin === true;
   const { isOffline } = useOffline();
   const location = useLocation();
   const navigate = useNavigate();
   const [toast, setToast] = useState(null);
-  const [orgCodeVerified, setOrgCodeVerified] = useState(() =>
-    localStorage.getItem('org_code_verified') === 'true'
-  );
+  // null until the saved flag has been read (Preferences is async).
+  const [orgCodeVerified, setOrgCodeVerified] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadAccessCodePassed().then((passed) => {
+      if (!cancelled) setOrgCodeVerified((prev) => prev === true || passed);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // A device that holds a session got past the gate (or predates it), so it is
+  // never asked again, including after sign-out.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    setOrgCodeVerified(true);
+    saveAccessCodePassed();
+  }, [isAuthenticated]);
 
   // Check for signup confirmation in URL hash and redirect to email-confirmed page
   useEffect(() => {
@@ -358,20 +374,30 @@ function AppContent() {
   const publicRoutes = ['/support', '/terms', '/privacy'];
   const isPublicRoute = publicRoutes.some(route => location.pathname === route);
 
+  // Auth links (password reset, email confirm) never stop at the gate. Check the
+  // hash too: on first render it has not been redirected to its route yet.
+  const authLinkRoutes = ['/reset-password', '/email-confirmed'];
+  const authHash = window.location.hash || '';
+  const isAuthLink = authLinkRoutes.includes(location.pathname)
+    || authHash.includes('type=recovery')
+    || authHash.includes('type=signup');
+
   // 2.0.1 single front gate (before login/signup): the user enters their
   // physician/sales access code once. The code is remembered on-device and
   // applied to org_role at sign-up (see the assign effect above).
   // A signed-in user already got past the gate on this device; never ask again.
-  if (!orgCodeVerified && !isPublicRoute && !loading && !isAuthenticated) {
+  // Only ask once the saved flag is read and the session check has finished,
+  // so a slow session restore at launch never flashes the gate.
+  if (orgCodeVerified === false && !isPublicRoute && !isAuthLink && authChecked && !loading && !isAuthenticated) {
     return (
       <RoleCodeGate onVerified={() => {
-        localStorage.setItem('org_code_verified', 'true');
         setOrgCodeVerified(true);
+        saveAccessCodePassed();
       }} />
     );
   }
 
-  if (loading) {
+  if (loading || (orgCodeVerified === null && !isAuthenticated)) {
     return (
       <div style={{
         display: 'flex',

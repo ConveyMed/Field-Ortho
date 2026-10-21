@@ -7,6 +7,10 @@ import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 
 const ActivityNotificationsContext = createContext({});
 
+// The panel only renders these types; anything else must not light the bell.
+const PANEL_TYPES = ['new_post', 'new_comment'];
+const HOUR_MS = 60 * 60 * 1000;
+
 export const useActivityNotifications = () => {
   const context = useContext(ActivityNotificationsContext);
   if (!context) {
@@ -203,7 +207,10 @@ export const ActivityNotificationsProvider = ({ children }) => {
   // Hide any post-related activity (new post, comment, like, reply) for posts this
   // user isn't allowed to see — by role + product group. Uses CURRENT view mode, so
   // it stays correct after the view toggle / once product assignments load.
+  // A notification about a post this user cannot load (deleted or hidden) is
+  // not shown either.
   const canSeeNotifPost = useCallback((n) => {
+    if (n.post_id && !n.post) return false;
     if (n.post_id && n.post) {
       return postAllowed(
         { visible_to_physicians: n.post.visible_to_physicians },
@@ -213,38 +220,50 @@ export const ActivityNotificationsProvider = ({ children }) => {
     return true;
   }, [postAllowed]);
 
-  // Get "NEW" notifications (created after last_checked_at) - controls bell badge
+  // Get all notifications for panel (excluding own activity)
+  // Read items: expire after 24 hours
+  // Unread items: expire after 72 hours
+  const getNotificationsForPanel = useCallback(() => {
+    const now = Date.now();
+
+    return notifications.filter(n => {
+      if (n.actor_id === user?.id) return false;
+      if (!PANEL_TYPES.includes(n.type)) return false;
+      if (!canSeeNotifPost(n)) return false;
+
+      const age = now - new Date(n.created_at).getTime();
+      const isRead = notificationReads.has(n.id);
+
+      // Read items expire after 24 hours, unread after 72
+      return age < (isRead ? 24 : 72) * HOUR_MS;
+    });
+  }, [notifications, user?.id, notificationReads, canSeeNotifPost]);
+
+  // Get "NEW" notifications (created after last_checked_at) - groups the panel
+  // and the banner. Limited to what the panel can show.
   const getNewNotifications = useCallback(() => {
     // Use user creation date as fallback if no last_checked_at
     const lastChecked = userState?.last_checked_at || userProfile?.created_at || user?.created_at;
     if (!lastChecked) return [];
 
     const lastCheckedAt = new Date(lastChecked);
-    return notifications.filter(n => {
-      // Don't show user's own activity
-      if (n.actor_id === user?.id) return false;
-      if (!canSeeNotifPost(n)) return false;
-      return new Date(n.created_at) > lastCheckedAt;
-    });
-  }, [notifications, userState, userProfile, user, canSeeNotifPost]);
+    return getNotificationsForPanel().filter(n => new Date(n.created_at) > lastCheckedAt);
+  }, [getNotificationsForPanel, userState, userProfile, user]);
 
-  // Get UNREAD notifications (not in notification_reads) - controls bold/unbold in list
+  // Get UNREAD notifications (not in notification_reads) - only what the panel
+  // shows, so the bell never lights for an item the panel hides.
   const getUnreadNotifications = useCallback(() => {
-    return notifications.filter(n => {
-      // Don't show user's own activity
-      if (n.actor_id === user?.id) return false;
-      if (!canSeeNotifPost(n)) return false;
-      return !notificationReads.has(n.id);
-    });
-  }, [notifications, notificationReads, user?.id, canSeeNotifPost]);
+    return getNotificationsForPanel().filter(n => !notificationReads.has(n.id));
+  }, [getNotificationsForPanel, notificationReads]);
 
   // Check if notification is read
   const isNotificationRead = useCallback((notificationId) => {
     return notificationReads.has(notificationId);
   }, [notificationReads]);
 
-  // Compute values directly (not as callbacks) to ensure they update properly
-  const newNotificationsList = getNewNotifications();
+  // Compute values directly (not as callbacks) to ensure they update properly.
+  // The bell's "new" badge counts only new items that are still unread.
+  const newNotificationsList = getNewNotifications().filter(n => !notificationReads.has(n.id));
   const unreadNotificationsList = getUnreadNotifications();
 
   // Check if there are NEW items (for bell badge)
@@ -266,31 +285,6 @@ export const ActivityNotificationsProvider = ({ children }) => {
   const unreadCount = useCallback(() => {
     return unreadNotificationsList.length;
   }, [unreadNotificationsList]);
-
-  // Get all notifications for panel (excluding own activity)
-  // Read items: expire after 24 hours
-  // Unread items: expire after 72 hours
-  const getNotificationsForPanel = useCallback(() => {
-    const now = new Date();
-    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const seventyTwoHoursAgo = new Date(now.getTime() - 72 * 60 * 60 * 1000);
-
-    return notifications.filter(n => {
-      if (n.actor_id === user?.id) return false;
-      if (!canSeeNotifPost(n)) return false;
-
-      const createdAt = new Date(n.created_at);
-      const isRead = notificationReads.has(n.id);
-
-      if (isRead) {
-        // Read items expire after 24 hours
-        return createdAt > twentyFourHoursAgo;
-      } else {
-        // Unread items expire after 72 hours
-        return createdAt > seventyTwoHoursAgo;
-      }
-    });
-  }, [notifications, user?.id, notificationReads, canSeeNotifPost]);
 
   // Group notifications for display
   const getGroupedNotifications = useCallback(() => {
@@ -421,9 +415,11 @@ export const ActivityNotificationsProvider = ({ children }) => {
     setNotificationReads(prev => new Set([...prev, notificationId]));
 
     try {
-      await supabase
+      const { error } = await supabase
         .from('notification_reads')
         .insert({ user_id: user.id, notification_id: notificationId });
+      // 23505 = already read on another device; anything else is a real failure.
+      if (error && error.code !== '23505') console.error('Error marking notification as read:', error);
     } catch (err) {
       console.error('Error marking notification as read:', err);
     }
@@ -467,7 +463,9 @@ export const ActivityNotificationsProvider = ({ children }) => {
       // Insert all unread notifications as read
       if (unread.length > 0) {
         const inserts = unread.map(n => ({ user_id: user.id, notification_id: n.id }));
-        await supabase.from('notification_reads').upsert(inserts, { onConflict: 'user_id,notification_id' });
+        // ignoreDuplicates (ON CONFLICT DO NOTHING): notification_reads has no
+        // UPDATE policy, so an upsert that updates is refused by RLS.
+        await supabase.from('notification_reads').upsert(inserts, { onConflict: 'user_id,notification_id', ignoreDuplicates: true });
       }
 
       // Update last_checked_at

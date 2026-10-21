@@ -32,7 +32,7 @@ const CheckIcon = () => (
 
 const EditProfile = () => {
   const navigate = useNavigate();
-  const { user, userProfile, refreshProfile } = useAuth();
+  const { user, userProfile, refreshProfile, checkAccount } = useAuth();
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -163,7 +163,7 @@ const EditProfile = () => {
       }
 
       // Update profile (don't update email in users table until confirmed)
-      const { error } = await supabase
+      const { data: savedRows, error } = await supabase
         .from('users')
         .update({
           first_name: firstName.trim(),
@@ -173,9 +173,15 @@ const EditProfile = () => {
           bio: bio.trim() || null,
           profile_image_url: imageUrl,
         })
-        .eq('id', user.id);
+        .eq('id', user.id)
+        .select('id');
 
       if (error) throw error;
+      // RLS can match zero rows without an error; that is not a save.
+      if (!savedRows || savedRows.length === 0) {
+        checkAccount();
+        throw new Error('Your profile could not be found. Please sign in again.');
+      }
 
       // Clear password fields
       setNewPassword('');

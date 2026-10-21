@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../config/supabase';
 import { clear as clearIDB } from 'idb-keyval';
+import { preservingAccessCode } from '../utils/accessCodeFlag';
 import './onboarding.css';
 
 function Login() {
@@ -54,23 +55,25 @@ function Login() {
     }
   };
 
+  // The device's access code pass survives a cache clear (asked once per device).
   const handleClearCache = async () => {
-    try {
-      await supabase.auth.signOut();
-      await clearIDB();
-      localStorage.clear();
-      sessionStorage.clear();
-      if ('caches' in window) {
-        const cacheNames = await caches.keys();
-        await Promise.all(cacheNames.map(name => caches.delete(name)));
+    await preservingAccessCode(async () => {
+      try {
+        await supabase.auth.signOut();
+        await clearIDB();
+        localStorage.clear();
+        sessionStorage.clear();
+        if ('caches' in window) {
+          const cacheNames = await caches.keys();
+          await Promise.all(cacheNames.map(name => caches.delete(name)));
+        }
+      } catch (err) {
+        console.error('Error clearing cache:', err);
+        localStorage.clear();
+        sessionStorage.clear();
       }
-      window.location.href = '/';
-    } catch (err) {
-      console.error('Error clearing cache:', err);
-      localStorage.clear();
-      sessionStorage.clear();
-      window.location.href = '/';
-    }
+    });
+    window.location.href = '/';
   };
 
   return (

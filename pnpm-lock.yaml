@@ -190,6 +190,9 @@ importers:
       '@capacitor/network':
         specifier: ^6.0.0
         version: 6.0.4(@capacitor/core@6.2.2)
+      '@capacitor/preferences':
+        specifier: ^6.0.4
+        version: 6.0.4(@capacitor/core@6.2.2)
       '@capacitor/splash-screen':
         specifier: ^6.0.0
         version: 6.0.4(@capacitor/core@6.2.2)
@@ -1066,6 +1069,11 @@ packages:
 
   '@capacitor/network@6.0.4':
     resolution: {integrity: sha512-ywtlM3wJ3evci0T9zl3aGXGvd96pkiQDeoxrGR3rAqcBpf9DQubMGdFRmHma3frn2Fd/MBDYlgleu+nWDXunAg==}
+    peerDependencies:
+      '@capacitor/core': ^6.0.0
+
+  '@capacitor/preferences@6.0.4':
+    resolution: {integrity: sha512-ziauSI1pgdyl+gduvvf8lInvzF3Wdyu/ok+u7NlnhKp8XOj9plJgtnXZWFiR8CiCK5wMvo+gFaNh3zhMyEUwpA==}
     peerDependencies:
       '@capacitor/core': ^6.0.0
 
@@ -7925,6 +7933,10 @@ snapshots:
       '@capacitor/core': 6.2.2
 
   '@capacitor/network@6.0.4(@capacitor/core@6.2.2)':
+    dependencies:
+      '@capacitor/core': 6.2.2
+
+  '@capacitor/preferences@6.0.4(@capacitor/core@6.2.2)':
     dependencies:
       '@capacitor/core': 6.2.2
 
